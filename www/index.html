@@ -3,10 +3,53 @@
   <head>
     <meta charset="utf-8">
     <title>MNIST</title>
+    <style>
+    canvas {
+        margin: 42px;
+        transform: scale(300%);
+        image-rendering: crisp-edges;
+    }
+    #imageViewer {
+        width: 200px;
+    }
+    #currentImage {
+        text-align: center;
+    }
+    .flex {
+        display: flex;
+    }
+    .column {
+        flex-direction: column;
+    }
+    .row {
+        flex-direction: row;
+    }
+    .center {
+        margin: auto;
+    }
+    .space {
+        justify-content: space-around;
+    }
+    </style>
   </head>
   <body>
     <noscript>This page contains webassembly and JavaScript content, please enable JavaScript in your browser.</noscript>
     <script src="./bootstrap.js"></script>
+    <button id="prepare">Prepare Data</button>
     <button id="train">Train</button>
+    <section id="imageViewer" class="flex column">
+        <div class="flex">
+            <div class="center">
+                <canvas id="image"></canvas>
+            </div>
+        </div>
+        <div class="flex column">
+            <span id="currentImage">0</span>
+            <div class="flex row space">
+                <button aria-label="Previous Image" id="previous">←</button>
+                <button aria-label="Next Image" id="next">→</button>
+            </div>
+        </div>
+    </section>
   </body>
 </html>
