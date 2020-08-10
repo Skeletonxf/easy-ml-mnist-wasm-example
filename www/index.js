@@ -55,6 +55,7 @@ prepareButton.addEventListener('click', async () => {
     nextButton.disabled = false;
     previousButton.disabled = false;
     trainButton.disabled = false;
+    prepareButton.disabled = true;
 })
 
 /**
