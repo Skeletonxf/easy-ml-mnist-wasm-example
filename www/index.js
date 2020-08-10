@@ -1,11 +1,17 @@
-import { train } from 'mnist-wasm'
+import { Dataset, Image, prepare } from 'mnist-wasm'
+import { memory } from "mnist-wasm/mnist_wasm_bg"
 
 let trainButton = document.querySelector('#train')
 trainButton.disabled = true
 
+const WIDTH = 28
+const HEIGHT = 28
+const TRAINING_SIZE = 8000
+const TESTING_SIZE = 2000
+
 let canvas = document.querySelector('#image');
-canvas.width = 28
-canvas.height = 28
+canvas.width = WIDTH
+canvas.height = HEIGHT
 let context = canvas.getContext('2d')
 
 let currentImageIndicator = document.querySelector('#currentImage');
@@ -28,7 +34,7 @@ previousButton.addEventListener('click', () => {
 })
 
 let drawCurrentImage = () => {
-    image = Math.min(Math.max(0, image), 7999)
+    image = Math.min(Math.max(0, image), TRAINING_SIZE - 1)
     if (mnist && context) {
         mnist.draw(training.images[image], context)
     }
@@ -45,7 +51,7 @@ let prepareButton = document.querySelector('#prepare')
 prepareButton.addEventListener('click', async () => {
     mnist = await import('mnist')
 
-    let dataset = mnist.set(8000, 2000)
+    let dataset = mnist.set(TRAINING_SIZE, TESTING_SIZE)
 
     training = splitData(dataset.training)
     testing = splitData(dataset.test)
@@ -79,5 +85,22 @@ let splitData = (dataset) => {
 }
 
 trainButton.addEventListener('click', () => {
-  train()
+    prepare()
+
+    let mnistWasm = new Dataset()
+    for (let i = 0; i < training.length; i++) {
+        let image = training.images[i]
+        let label = training.labels[i]
+        let imageWasm = new Image()
+        let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
+        // copy each pixel into the buffer exposed over Wasm to give it to
+        // the Rust code
+        for (let j = 0; j < WIDTH * HEIGHT; j++) {
+            pixels[j] = image[j];
+        }
+        mnistWasm.add(pixels, label)
+    }
+
+    //train()
+    console.log('Done')
 })
