@@ -1,4 +1,4 @@
-import { Dataset, Image, prepare } from 'mnist-wasm'
+import { Dataset, Image, NeuralNetwork, prepare } from 'mnist-wasm'
 import { memory } from "mnist-wasm/mnist_wasm_bg"
 
 let trainButton = document.querySelector('#train')
@@ -84,23 +84,29 @@ let splitData = (dataset) => {
     }
 }
 
-trainButton.addEventListener('click', () => {
-    prepare()
+let mnistWasm = Dataset.new()
+let loadedTrainingData = false
+let network = NeuralNetwork.new()
 
-    let mnistWasm = new Dataset()
-    for (let i = 0; i < training.length; i++) {
-        let image = training.images[i]
-        let label = training.labels[i]
-        let imageWasm = new Image()
-        let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
-        // copy each pixel into the buffer exposed over Wasm to give it to
-        // the Rust code
-        for (let j = 0; j < WIDTH * HEIGHT; j++) {
-            pixels[j] = image[j];
+trainButton.addEventListener('click', () => {
+    if (!loadedTrainingData) {
+        prepare()
+
+        for (let i = 0; i < training.length; i++) {
+            let image = training.images[i]
+            let label = training.labels[i]
+            let imageWasm = Image.new()
+            let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
+            // copy each pixel into the buffer exposed over Wasm to give it to
+            // the Rust code
+            for (let j = 0; j < WIDTH * HEIGHT; j++) {
+                pixels[j] = image[j];
+            }
+            mnistWasm.add(pixels, label)
         }
-        mnistWasm.add(pixels, label)
     }
 
-    //train()
+    network.train(mnistWasm)
+
     console.log('Done')
 })

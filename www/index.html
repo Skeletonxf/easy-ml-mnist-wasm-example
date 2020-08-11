@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>MNIST</title>
     <style>
-    canvas {
+    #image {
         margin: 42px;
         transform: scale(300%);
         image-rendering: crisp-edges;
@@ -50,6 +50,11 @@
                 <button aria-label="Next Image" id="next">→</button>
             </div>
         </div>
+    </section>
+    <section id="networkViewer" class="flex row">
+        <canvas id="layer1"></canvas>
+        <canvas id="layer2"></canvas>
+        <canvas id="layer3"></canvas>
     </section>
   </body>
 </html>

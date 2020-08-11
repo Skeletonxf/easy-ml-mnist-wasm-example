@@ -34,6 +34,9 @@ features = [
   "console",
 ]
 
+[dependencies.js-sys]
+version = "0.3.40"
+
 [dev-dependencies]
 wasm-bindgen-test = "0.3.13"
 
