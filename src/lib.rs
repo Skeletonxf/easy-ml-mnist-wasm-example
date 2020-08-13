@@ -8,6 +8,8 @@ extern crate js_sys;
 
 use easy_ml::matrices::Matrix;
 use easy_ml::differentiation::{Record, WengertList};
+use easy_ml::linear_algebra;
+use easy_ml::numeric::{Numeric};
 
 use std::convert::TryFrom;
 use std::convert::TryInto;
@@ -61,6 +63,12 @@ impl Image {
     /// Accesses the data buffer of this Image, for JavaScript to fill with the actual data
     pub fn buffer(&mut self) -> *const Pixel {
         self.data.as_ptr()
+    }
+}
+
+impl From<Image> for Matrix<f64> {
+    fn from(image: Image) -> Self {
+        Matrix::from_flat_row_major((28,28), image.data).map(|pixel| (pixel as f64) / 255.0)
     }
 }
 
@@ -131,17 +139,22 @@ pub struct NeuralNetwork {
     //buffer: Vec<f64>,
 }
 
-const FIRST_HIDDEN_LAYER_SIZE: usize = 800;
-const SECOND_HIDDEN_LAYER_SIZE: usize = 400;
+const FIRST_HIDDEN_LAYER_SIZE: usize = 128;
+const SECOND_HIDDEN_LAYER_SIZE: usize = 64;
+
+fn relu<T: Numeric + Copy>(x: T) -> T {
+    if x > T::zero() {
+        x
+    } else {
+        T::zero()
+    }
+}
 
 #[wasm_bindgen]
 impl NeuralNetwork {
     /// Creates a new Neural Network configuration of randomised weights
     /// and a simple feed forward architecture.
     pub fn new() -> NeuralNetwork {
-        // TODO: Use a Convolutional Arch
-        // Extract the 28x28 images into a feature map of strided filters
-        // ReLu will work fine for activation function
         let mut weights = vec![
             Matrix::empty(0.0, (WIDTH * HEIGHT, FIRST_HIDDEN_LAYER_SIZE)),
             Matrix::empty(0.0, (FIRST_HIDDEN_LAYER_SIZE, SECOND_HIDDEN_LAYER_SIZE)),
@@ -164,6 +177,25 @@ impl NeuralNetwork {
         self.weights.len()
     }
 
+    pub fn classify(&self, image: &Image) -> Digit {
+        let input: Matrix<f64> = image.clone().into();
+        // this neural network is a simple feed forward architecture, so dot product
+        // the input through the network weights and apply the relu activation
+        // function each step, then take softmax to produce an output
+        let output = ((input * &self.weights[0]).map(relu) * &self.weights[1]).map(relu) * &self.weights[2];
+        let classification = linear_algebra::softmax(output.row_major_iter());
+        // find the index of the largest softmax'd label
+        classification.iter()
+            // find argmax of the output
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("NaN should not be in list"))
+            // convert from usize into a Digit
+            .map(|(i, _)| i as u8)
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+
     // TODO: Would be more informative to plot the neurons?
     // /// Updates and accesses a buffer of a copy of one of the weights, for JavaScript to visualise
     // pub fn get_buffer(&mut self, index: usize) -> *const f64 {
@@ -173,7 +205,10 @@ impl NeuralNetwork {
     // }
 
     pub fn train(&mut self, training_data: &Dataset) {
-        // TODO
+        let history = WengertList::new();
+        let mut training = NeuralNetworkTraining::from(&self, &history);
+        training.train(training_data);
+        training.update(self);
     }
 }
 
@@ -235,6 +270,28 @@ impl <'a> NeuralNetworkTraining<'a> {
             }
         }
     }
+
+    /// Classification is very similar for training, except we stay in floating point
+    /// land so we can backprop the error.
+    // TODO
+    // pub fn classify(&self, image: &Image) -> f64 {
+    //     let input: Matrix<f64> = image.clone().into();
+    //     // this neural network is a simple feed forward architecture, so dot product
+    //     // the input through the network weights and apply the relu activation
+    //     // function each step, then take softmax to produce an output
+    //     let output = ((input * &self.weights[0]).map(relu) * &self.weights[1]).map(relu) * &self.weights[2];
+    //     let classification = linear_algebra::softmax(output.row_major_iter());
+    //     // find the index of the largest softmax'd label
+    //     classification.iter()
+    //         // find argmax of the output
+    //         .enumerate()
+    //         .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("NaN should not be in list"))
+    //         // convert from usize into a Digit
+    //         .map(|(i, _)| i as u8)
+    //         .unwrap()
+    //         .try_into()
+    //         .unwrap()
+    // }
 
     fn train(&mut self, training_data: &Dataset) {
         // TODO
