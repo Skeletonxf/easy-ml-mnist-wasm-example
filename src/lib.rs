@@ -41,6 +41,7 @@ const WIDTH: usize = 28;
 const HEIGHT: usize = 28;
 const TRAINING_SIZE: usize = 8000;
 const TESTING_SIZE: usize = 2000;
+const LEARNING_RATE: f64 = 0.01;
 /// mnist data is grayscale 0-255
 
 type Pixel = u8;
@@ -64,11 +65,17 @@ impl Image {
     pub fn buffer(&mut self) -> *const Pixel {
         self.data.as_ptr()
     }
+
+    pub fn set_length(&mut self) {
+        // this is safe because we will only call it after initialising all elements
+        // via buffer access on the JS side
+        unsafe { self.data.set_len(WIDTH * HEIGHT); }
+    }
 }
 
 impl From<Image> for Matrix<f64> {
     fn from(image: Image) -> Self {
-        Matrix::from_flat_row_major((28,28), image.data).map(|pixel| (pixel as f64) / 255.0)
+        Matrix::from_flat_row_major((1,WIDTH * HEIGHT), image.data).map(|pixel| (pixel as f64) / 255.0)
     }
 }
 
@@ -105,6 +112,40 @@ impl TryFrom<u8> for Digit {
             8 => Ok(Digit::Eight),
             9 => Ok(Digit::Nine),
             _ => Err("Number out of range"),
+        }
+    }
+}
+
+impl From<Digit> for u8 {
+    fn from(label: Digit) -> Self {
+        match label {
+            Digit::Zero => 0,
+            Digit::One => 1,
+            Digit::Two => 2,
+            Digit::Three => 3,
+            Digit::Four => 4,
+            Digit::Five => 5,
+            Digit::Six => 6,
+            Digit::Seven => 7,
+            Digit::Eight => 8,
+            Digit::Nine => 9,
+        }
+    }
+}
+
+impl From<Digit> for usize {
+    fn from(label: Digit) -> Self {
+        match label {
+            Digit::Zero => 0,
+            Digit::One => 1,
+            Digit::Two => 2,
+            Digit::Three => 3,
+            Digit::Four => 4,
+            Digit::Five => 5,
+            Digit::Six => 6,
+            Digit::Seven => 7,
+            Digit::Eight => 8,
+            Digit::Nine => 9,
         }
     }
 }
@@ -204,11 +245,13 @@ impl NeuralNetwork {
     //     self.buffer.as_ptr()
     // }
 
-    pub fn train(&mut self, training_data: &Dataset) {
+    /// Trains the neural net for 1 epoch and returns the average loss on the epoch
+    pub fn train(&mut self, training_data: &Dataset) -> f64 {
         let history = WengertList::new();
         let mut training = NeuralNetworkTraining::from(&self, &history);
-        training.train(training_data);
+        let loss = training.train_epoch(training_data, &history);
         training.update(self);
+        loss
     }
 }
 
@@ -241,11 +284,11 @@ impl <'a> NeuralNetworkTraining<'a> {
     /// and an existing configuration for weights, creates a new NeuralNetworkTraining
     fn from(configuration: &NeuralNetwork, history: &'a WengertList<f64>) -> NeuralNetworkTraining<'a> {
         let mut weights = Vec::with_capacity(configuration.weights.len());
-        for i in 0..weights.len() {
-            weights[i] = Matrix::empty(
+        for i in 0..configuration.weights.len() {
+            weights.push(Matrix::empty(
                 Record::variable(0.0, &history),
                 configuration.weights[i].size()
-            );
+            ));
             for j in 0..configuration.weights[i].size().0 {
                 for k in 0..configuration.weights[i].size().1 {
                     let neuron = configuration.weights[i].get(j, k);
@@ -272,33 +315,74 @@ impl <'a> NeuralNetworkTraining<'a> {
     }
 
     /// Classification is very similar for training, except we stay in floating point
-    /// land so we can backprop the error.
-    // TODO
-    // pub fn classify(&self, image: &Image) -> f64 {
-    //     let input: Matrix<f64> = image.clone().into();
-    //     // this neural network is a simple feed forward architecture, so dot product
-    //     // the input through the network weights and apply the relu activation
-    //     // function each step, then take softmax to produce an output
-    //     let output = ((input * &self.weights[0]).map(relu) * &self.weights[1]).map(relu) * &self.weights[2];
-    //     let classification = linear_algebra::softmax(output.row_major_iter());
-    //     // find the index of the largest softmax'd label
-    //     classification.iter()
-    //         // find argmax of the output
-    //         .enumerate()
-    //         .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("NaN should not be in list"))
-    //         // convert from usize into a Digit
-    //         .map(|(i, _)| i as u8)
-    //         .unwrap()
-    //         .try_into()
-    //         .unwrap()
-    // }
+    /// land so we can backprop the error. Returns the error on this image.
+    pub fn train(&mut self, image: &Image, learning_rate: f64, label: Digit, history: &'a WengertList<f64>) -> f64 {
+        let input: Matrix<f64> = image.clone().into();
+        // this neural network is a simple feed forward architecture, so dot product
+        // the input through the network weights and apply the relu activation
+        // function each step, then take softmax to produce an output
+        let output = {
+            let i = input.map(|p| Record::constant(p));
+            let layer1 = (i * &self.weights[0]).map(relu);
+            let layer2 = (layer1 * &self.weights[1]).map(relu);
+            layer2 * &self.weights[2]
+        };
+        let classification = linear_algebra::softmax(output.row_major_iter());
+        // Get what we predicted for the true label. To minimise error, we should
+        // have predicted 1
+        let prediction: Record<f64> = classification[Into::<usize>::into(label)];
+        // If we predicted 1 for the true label, error is 0, likewise, if
+        // we predicted 0 for the true label, error is 1.
+        let error: Record<f64> = Record::constant(1.0) - prediction;
+        let derivatives = error.derivatives();
+        // update weights to minimise error, note that if error was 0 this
+        // trivially does nothing
+        self.weights[0].map_mut(|x| x - (derivatives[&x] * learning_rate));
+        self.weights[1].map_mut(|x| x - (derivatives[&x] * learning_rate));
+        self.weights[2].map_mut(|x| x - (derivatives[&x] * learning_rate));
+        // reset gradients
+        history.clear();
+        self.weights[0].map_mut(Record::do_reset);
+        self.weights[1].map_mut(Record::do_reset);
+        self.weights[2].map_mut(Record::do_reset);
+        error.number
+    }
 
-    fn train(&mut self, training_data: &Dataset) {
-        // TODO
+    /// Performs SGD for one epoch on all of the training data in a random order, returning
+    /// the average loss.
+    pub fn train_epoch(&mut self, training_data: &Dataset, history: &'a WengertList<f64>) -> f64 {
+        let random_numbers = EndlessRandomGenerator {};
+        let random_index_order: Vec<usize> = {
+            let mut indexes: Vec<(usize, f64)> = (0..training_data.images.len())
+                .zip(random_numbers)
+                .collect();
+            // sort by the random numbers we zipped
+            indexes.sort_by(|(_, i), (_, j)| i.partial_cmp(j).unwrap());
+            // drop the random numbers in the now randomised list of indexes
+            indexes.drain(..).map(|(x, _)| x).collect()
+        };
+        let mut epoch_losses = 0.0;
+        for i in random_index_order {
+            epoch_losses += self.train(
+                &training_data.images[i], LEARNING_RATE, training_data.labels[i], history
+            );
+        }
+        epoch_losses / (training_data.images.len() as f64)
     }
 }
 
 #[wasm_bindgen]
 pub fn prepare() {
     utils::set_panic_hook();
+}
+
+struct EndlessRandomGenerator {}
+
+impl Iterator for EndlessRandomGenerator {
+    type Item = f64;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // always return Some, hence this iterator is infinite
+        Some(js_sys::Math::random())
+    }
 }

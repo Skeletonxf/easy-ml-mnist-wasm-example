@@ -20,6 +20,9 @@ let mnist = null;
 let training = null;
 let testing = null;
 
+let mnistWasm = Dataset.new()
+let network = NeuralNetwork.new()
+
 let nextButton = document.querySelector('#next')
 nextButton.disabled = true;
 nextButton.addEventListener('click', () => {
@@ -56,6 +59,22 @@ prepareButton.addEventListener('click', async () => {
     training = splitData(dataset.training)
     testing = splitData(dataset.test)
 
+    prepare()
+
+    for (let i = 0; i < training.images.length; i++) {
+        let image = training.images[i]
+        let label = training.labels[i]
+        let imageWasm = Image.new()
+        let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
+        // copy each pixel into the buffer exposed over Wasm to give it to
+        // the Rust code
+        for (let j = 0; j < WIDTH * HEIGHT; j++) {
+            pixels[j] = image[j];
+        }
+        imageWasm.set_length()
+        mnistWasm.add(imageWasm, label)
+    }
+
     drawCurrentImage()
 
     nextButton.disabled = false;
@@ -84,29 +103,10 @@ let splitData = (dataset) => {
     }
 }
 
-let mnistWasm = Dataset.new()
-let loadedTrainingData = false
-let network = NeuralNetwork.new()
+// FIXME: Going to need to do training in a web worker
+// https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage
 
 trainButton.addEventListener('click', () => {
-    if (!loadedTrainingData) {
-        prepare()
-
-        for (let i = 0; i < training.length; i++) {
-            let image = training.images[i]
-            let label = training.labels[i]
-            let imageWasm = Image.new()
-            let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
-            // copy each pixel into the buffer exposed over Wasm to give it to
-            // the Rust code
-            for (let j = 0; j < WIDTH * HEIGHT; j++) {
-                pixels[j] = image[j];
-            }
-            mnistWasm.add(pixels, label)
-        }
-    }
-
-    network.train(mnistWasm)
-
-    console.log('Done')
+    let loss = network.train(mnistWasm)
+    console.log(`Average loss ${loss}`);
 })
