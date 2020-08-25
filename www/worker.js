@@ -1,5 +1,4 @@
-import { Dataset, Image, NeuralNetwork, prepare } from 'mnist-wasm'
-import { memory } from 'mnist-wasm/mnist_wasm_bg'
+importScripts('pkg/mnist_wasm.js')
 
 const WIDTH = 28
 const HEIGHT = 28
@@ -10,47 +9,56 @@ let mnist = null
 let training = null
 let testing = null
 
-let mnistWasm = Dataset.new()
-let network = NeuralNetwork.new()
+let memory = null
 
-onmessage = async (event) => {
-    let data = event.data
-    if (data.prepareDataset) {
-        mnist = await import('mnist')
+wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
+    memory = mnistWasmModule.memory
+    const { Dataset, Image, NeuralNetwork, prepare } = wasm_bindgen;
 
-        let dataset = mnist.set(TRAINING_SIZE, TESTING_SIZE)
-        training = splitData(dataset.training)
-        testing = splitData(dataset.test)
+    let mnistWasm = Dataset.new()
+    let network = NeuralNetwork.new()
 
-        for (let i = 0; i < training.images.length; i++) {
-            let image = training.images[i]
-            let label = training.labels[i]
-            let imageWasm = Image.new()
-            let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
-            // copy each pixel into the buffer exposed over Wasm to give it to
-            // the Rust code
-            for (let j = 0; j < WIDTH * HEIGHT; j++) {
-                pixels[j] = image[j]
+    onmessage = async (event) => {
+        let data = event.data
+        if (data.prepareDataset) {
+            // TODO: Replace with ES5 import/include
+            //mnist = await import('mnist')
+
+            let dataset = mnist.set(TRAINING_SIZE, TESTING_SIZE)
+            training = splitData(dataset.training)
+            testing = splitData(dataset.test)
+
+            for (let i = 0; i < training.images.length; i++) {
+                let image = training.images[i]
+                let label = training.labels[i]
+                let imageWasm = Image.new()
+                let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
+                // copy each pixel into the buffer exposed over Wasm to give it to
+                // the Rust code
+                for (let j = 0; j < WIDTH * HEIGHT; j++) {
+                    pixels[j] = image[j]
+                }
+                imageWasm.set_length()
+                mnistWasm.add(imageWasm, label)
             }
-            imageWasm.set_length()
-            mnistWasm.add(imageWasm, label)
+            postMessage({ datasetPrepared: true })
         }
-        postMessage({ datasetPrepared: true })
+        if (data.trainEpoch) {
+            let loss = network.train(mnistWasm)
+            postMessage({ trainedEpoch: true, loss: loss })
+        }
+        if (data.requestCurrentImage) {
+            image = Math.min(Math.max(0, data.currentImage), TRAINING_SIZE - 1)
+            postMessage({
+                currentImage: true,
+                imageData: training.images[image],
+                label: training.labels[image],
+                index: image
+            })
+        }
     }
-    if (data.trainEpoch) {
-        let loss = network.train(mnistWasm)
-        postMessage({ trainedEpoch: true, loss: loss })
-    }
-    if (data.requestCurrentImage) {
-        image = Math.min(Math.max(0, data.currentImage), TRAINING_SIZE - 1)
-        postMessage({
-            currentImage: true,
-            imageData: training.images[image],
-            label: training.labels[image],
-            index: image
-        })
-    }
-}
+})
+
 
 /**
  * Converts a dataset provided by the mnist package into two seperate

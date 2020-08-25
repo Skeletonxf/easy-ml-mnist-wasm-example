@@ -1,69 +1,42 @@
-<div align="center">
+# Easy ML MNIST Web Assembly Example
 
-  <h1><code>wasm-pack-template</code></h1>
+Simple MNIST Neural Network scaffold for demonstrating Rust code in the browser.
 
-  <strong>A template for kick starting a Rust and WebAssembly project using <a href="https://github.com/rustwasm/wasm-pack">wasm-pack</a>.</strong>
+Uses `wasm-pack` to build the web assembly. The webpage can be accessed by
+running the included Node.js server.
 
-  <p>
-    <a href="https://travis-ci.org/rustwasm/wasm-pack-template"><img src="https://img.shields.io/travis/rustwasm/wasm-pack-template.svg?style=flat-square" alt="Build Status" /></a>
-  </p>
+## Limitations
 
-  <h3>
-    <a href="https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html">Tutorial</a>
-    <span> | </span>
-    <a href="https://discordapp.com/channels/442252698964721669/443151097398296587">Chat</a>
-  </h3>
+At the time of writing,
+[there is not widespread support](https://caniuse.com/#feat=mdn-javascript_statements_import_worker_support)
+for ES6 module imports in Web Workers. Hence, this scaffold uses
+`importScripts` to import the web assembly in the web worker, and
+`wasm-pack build --target no-modules --out-dir www/pkg` to generate the web
+assembly and JavaScript code for the Web Worker to import.
 
-  <sub>Built with 🦀🕸 by <a href="https://rustwasm.github.io/">The Rust and WebAssembly Working Group</a></sub>
-</div>
+This makes the code a little less nice than if we could use ES6 modules
+everywhere, but is worth it as training a machine learning system in the
+main loop will almost certainly freeze up the browser or web page.
 
-## About
+If you're reading this in the future, and ES6 imports are widely available in
+Web Workers then please open an issue so I can update the template to use
+module imports.
 
-[**📚 Read this template tutorial! 📚**][template-docs]
+## Running
 
-This template is designed for compiling Rust libraries into WebAssembly and
-publishing the resulting package to NPM.
+First generate the web assembly by running
+`wasm-pack build --target no-modules --out-dir www/pkg`. Then `cd www` and
+run `npm install` to install the server, then `npm run start` to launch it.
 
-Be sure to check out [other `wasm-pack` tutorials online][tutorials] for other
-templates and usages of `wasm-pack`.
+Open `http://localhost:8080/`
 
-[tutorials]: https://rustwasm.github.io/docs/wasm-pack/tutorials/index.html
-[template-docs]: https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html
+The webpack dev server will automatically reload JavaScript when you edit it,
+but the Rust code must be manually rebuilt with
+`wasm-pack build --target no-modules --out-dir www/pkg` ran from the root of the project directory each time you make
+changes.
 
-## 🚴 Usage
+## Background info
 
-### 🐑 Use `cargo generate` to Clone this Template
-
-[Learn more about `cargo generate` here.](https://github.com/ashleygwilliams/cargo-generate)
-
-```
-cargo generate --git https://github.com/rustwasm/wasm-pack-template.git --name my-project
-cd my-project
-```
-
-### 🛠️ Build with `wasm-pack build`
-
-```
-wasm-pack build
-```
-
-### 🔬 Test in Headless Browsers with `wasm-pack test`
-
-```
-wasm-pack test --headless --firefox
-```
-
-### 🎁 Publish to NPM with `wasm-pack publish`
-
-```
-wasm-pack publish
-```
-
-## 🔋 Batteries Included
-
-* [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) for communicating
-  between WebAssembly and JavaScript.
-* [`console_error_panic_hook`](https://github.com/rustwasm/console_error_panic_hook)
-  for logging panic messages to the developer console.
-* [`wee_alloc`](https://github.com/rustwasm/wee_alloc), an allocator optimized
-  for small code size.
+For further information on Rust and WebAssembly checkout the tutorials by the rust-wasm group.
+- https://rustwasm.github.io/docs/book/introduction.html
+- https://rustwasm.github.io/docs/wasm-pack/introduction.html
