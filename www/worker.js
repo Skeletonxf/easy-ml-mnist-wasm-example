@@ -1,11 +1,13 @@
 importScripts('pkg/mnist_wasm.js')
+// hack to make mnist.js load correctly in a web worker environment
+var window = self
+importScripts('node_modules/mnist/dist/mnist.js')
 
 const WIDTH = 28
 const HEIGHT = 28
 const TRAINING_SIZE = 8000
 const TESTING_SIZE = 2000
 
-let mnist = null
 let training = null
 let testing = null
 
@@ -21,9 +23,6 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
     onmessage = async (event) => {
         let data = event.data
         if (data.prepareDataset) {
-            // TODO: Replace with ES5 import/include
-            //mnist = await import('mnist')
-
             let dataset = mnist.set(TRAINING_SIZE, TESTING_SIZE)
             training = splitData(dataset.training)
             testing = splitData(dataset.test)
@@ -57,6 +56,10 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
             })
         }
     }
+
+    postMessage({
+        loadedWorker: true
+    })
 })
 
 
