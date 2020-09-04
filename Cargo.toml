@@ -24,7 +24,7 @@ console_error_panic_hook = { version = "0.1.6", optional = true }
 # allocator, however.
 #
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
-wee_alloc = { version = "0.4.5", optional = true }
+# wee_alloc = { version = "0.4.5", optional = true }
 
 easy-ml = { git = "https://github.com/Skeletonxf/easy-ml" }
 
@@ -41,5 +41,5 @@ version = "0.3.40"
 wasm-bindgen-test = "0.3.13"
 
 [profile.release]
-# Tell `rustc` to optimize for small code size.
-opt-level = "s"
+# Don't tell `rustc` to optimize for small code size.
+# opt-level = "s"
