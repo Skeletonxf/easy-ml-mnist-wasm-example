@@ -238,14 +238,6 @@ impl NeuralNetwork {
             .unwrap()
     }
 
-    // TODO: Would be more informative to plot the neurons?
-    // /// Updates and accesses a buffer of a copy of one of the weights, for JavaScript to visualise
-    // pub fn get_buffer(&mut self, index: usize) -> *const f64 {
-    //     assert!(index < self.weights.len());
-    //     self.buffer = self.weights[index].row_major_iter().collect();
-    //     self.buffer.as_ptr()
-    // }
-
     /// Trains the neural net for 1 epoch and returns the average loss on the epoch
     pub fn train(&mut self, training_data: &Dataset) -> f64 {
         log!("Creating WengertList");

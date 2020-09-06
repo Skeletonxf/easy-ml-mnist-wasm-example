@@ -20,6 +20,18 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
     let mnistWasm = Dataset.new()
     let network = NeuralNetwork.new()
 
+    let intoImage = (image) => {
+        let imageWasm = Image.new()
+        let pixels = new Float64Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
+        // copy each pixel into the buffer exposed over Wasm to give it to
+        // the Rust code
+        for (let j = 0; j < WIDTH * HEIGHT; j++) {
+            pixels[j] = image[j]
+        }
+        imageWasm.set_length()
+        return imageWasm
+    }
+
     onmessage = async (event) => {
         let data = event.data
         if (data.prepareDataset) {
@@ -30,15 +42,7 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
             for (let i = 0; i < training.images.length; i++) {
                 let image = training.images[i]
                 let label = training.labels[i]
-                let imageWasm = Image.new()
-                let pixels = new Float64Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
-                // copy each pixel into the buffer exposed over Wasm to give it to
-                // the Rust code
-                for (let j = 0; j < WIDTH * HEIGHT; j++) {
-                    pixels[j] = image[j]
-                }
-                imageWasm.set_length()
-                mnistWasm.add(imageWasm, label)
+                mnistWasm.add(intoImage(image), label)
             }
             postMessage({ datasetPrepared: true })
         }
@@ -48,11 +52,13 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
         }
         if (data.requestCurrentImage) {
             image = Math.min(Math.max(0, data.currentImage), TRAINING_SIZE - 1)
+            let classification = network.classify(intoImage(training.images[image]))
             postMessage({
                 currentImage: true,
                 imageData: training.images[image],
                 label: training.labels[image],
-                index: image
+                index: image,
+                classification: classification
             })
         }
     }
@@ -61,7 +67,6 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
         loadedWorker: true
     })
 })
-
 
 /**
  * Converts a dataset provided by the mnist package into two seperate

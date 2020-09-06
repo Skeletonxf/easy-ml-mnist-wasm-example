@@ -96,7 +96,7 @@ worker.onmessage = (event) => {
                 context.fillRect(x, y, 1, 1)
             }
         }
-        currentImageIndicator.innerHTML = `Image #${index}: (${label})`
+        currentImageIndicator.innerHTML = `Image #${index}: (${label})\nPredicted: ${data.classification}`
     }
     if (data.trainedEpoch) {
         console.log(`Loss: ${data.loss}`)
