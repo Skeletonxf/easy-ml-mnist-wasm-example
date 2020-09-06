@@ -10,7 +10,7 @@ use easy_ml::matrices::Matrix;
 use easy_ml::differentiation::{Record, WengertList};
 use easy_ml::linear_algebra;
 use easy_ml::numeric::{Numeric};
-use easy_ml::numeric::extra::{Exp, Real};
+use easy_ml::numeric::extra::{Real};
 
 use std::convert::TryFrom;
 use std::convert::TryInto;
