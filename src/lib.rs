@@ -10,6 +10,7 @@ use easy_ml::matrices::Matrix;
 use easy_ml::differentiation::{Record, WengertList};
 use easy_ml::linear_algebra;
 use easy_ml::numeric::{Numeric};
+use easy_ml::numeric::extra::{Exp, Real};
 
 use std::convert::TryFrom;
 use std::convert::TryInto;
@@ -32,22 +33,17 @@ extern {
     fn alert(s: &str);
 }
 
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, mnist!");
-}
-
 const WIDTH: usize = 28;
 const HEIGHT: usize = 28;
 const TRAINING_SIZE: usize = 8000;
 const TESTING_SIZE: usize = 2000;
-const LEARNING_RATE: f64 = 0.01;
-/// mnist data is grayscale 0-255
+const LEARNING_RATE: f64 = 0.1;
 
-type Pixel = u8;
+/// mnist data is grayscale 0-1 range
+type Pixel = f64;
 
 #[wasm_bindgen]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Image {
     data: Vec<Pixel>
 }
@@ -75,7 +71,7 @@ impl Image {
 
 impl From<Image> for Matrix<f64> {
     fn from(image: Image) -> Self {
-        Matrix::from_flat_row_major((1,WIDTH * HEIGHT), image.data).map(|pixel| (pixel as f64) / 255.0)
+        Matrix::from_flat_row_major((1,WIDTH * HEIGHT), image.data).map(|pixel| pixel)
     }
 }
 
@@ -183,12 +179,16 @@ pub struct NeuralNetwork {
 const FIRST_HIDDEN_LAYER_SIZE: usize = 128;
 const SECOND_HIDDEN_LAYER_SIZE: usize = 64;
 
-fn relu<T: Numeric + Copy>(x: T) -> T {
-    if x > T::zero() {
-        x
-    } else {
-        T::zero()
-    }
+// fn relu<T: Numeric + Copy>(x: T) -> T {
+//     if x > T::zero() {
+//         x
+//     } else {
+//         T::zero()
+//     }
+// }
+
+fn sigmoid<T: Numeric + Real+ Copy>(x: T) -> T {
+    T::one() / (T::one() + (-x).exp())
 }
 
 #[wasm_bindgen]
@@ -204,7 +204,7 @@ impl NeuralNetwork {
         for i in 0..weights.len() {
             for j in 0..weights[i].size().0 {
                 for k in 0..weights[i].size().1 {
-                    weights[i].set(j, k, js_sys::Math::random());
+                    weights[i].set(j, k, (2.0 * js_sys::Math::random()) - 1.0);
                 }
             }
         }
@@ -221,16 +221,17 @@ impl NeuralNetwork {
     pub fn classify(&self, image: &Image) -> Digit {
         let input: Matrix<f64> = image.clone().into();
         // this neural network is a simple feed forward architecture, so dot product
-        // the input through the network weights and apply the relu activation
+        // the input through the network weights and apply the sigmoid activation
         // function each step, then take softmax to produce an output
-        let output = ((input * &self.weights[0]).map(relu) * &self.weights[1]).map(relu) * &self.weights[2];
+        let output = ((input * &self.weights[0]).map(sigmoid) * &self.weights[1]).map(sigmoid) * &self.weights[2];
         let classification = linear_algebra::softmax(output.row_major_iter());
         // find the index of the largest softmax'd label
         classification.iter()
             // find argmax of the output
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).expect("NaN should not be in list"))
-            // convert from usize into a Digit
+            // convert from usize into a Digit, by construction classiciation only has
+            // 10 elements, so the index will fit into a Digit
             .map(|(i, _)| i as u8)
             .unwrap()
             .try_into()
@@ -247,10 +248,15 @@ impl NeuralNetwork {
 
     /// Trains the neural net for 1 epoch and returns the average loss on the epoch
     pub fn train(&mut self, training_data: &Dataset) -> f64 {
+        log!("Creating WengertList");
         let history = WengertList::new();
+        log!("Creating training object");
         let mut training = NeuralNetworkTraining::from(&self, &history);
+        log!("Starting training");
         let loss = training.train_epoch(training_data, &history);
+        log!("Going to update self weights");
         training.update(self);
+        log!("Finished epoch");
         loss
     }
 }
@@ -292,7 +298,7 @@ impl <'a> NeuralNetworkTraining<'a> {
             for j in 0..configuration.weights[i].size().0 {
                 for k in 0..configuration.weights[i].size().1 {
                     let neuron = configuration.weights[i].get(j, k);
-                    weights[i].get(j, k).number = neuron;
+                    weights[i].set(j, k, Record::variable(neuron, &history));
                 }
             }
         }
@@ -316,18 +322,19 @@ impl <'a> NeuralNetworkTraining<'a> {
 
     /// Classification is very similar for training, except we stay in floating point
     /// land so we can backprop the error. Returns the error on this image.
-    pub fn train(&mut self, image: &Image, learning_rate: f64, label: Digit, history: &'a WengertList<f64>) -> f64 {
+    pub fn train(&mut self, image: &Image, learning_rate: f64, label: Digit, history: &'a WengertList<f64>, debug: bool) -> f64 {
         let input: Matrix<f64> = image.clone().into();
         // this neural network is a simple feed forward architecture, so dot product
-        // the input through the network weights and apply the relu activation
+        // the input through the network weights and apply the sigmoid activation
         // function each step, then take softmax to produce an output
         let output = {
             let i = input.map(|p| Record::constant(p));
-            let layer1 = (i * &self.weights[0]).map(relu);
-            let layer2 = (layer1 * &self.weights[1]).map(relu);
+            let layer1 = (i * &self.weights[0]).map(sigmoid);
+            let layer2 = (layer1 * &self.weights[1]).map(sigmoid);
             layer2 * &self.weights[2]
         };
         let classification = linear_algebra::softmax(output.row_major_iter());
+        //let classification = NeuralNetworkTraining::softmax(output.row_major_iter());
         // Get what we predicted for the true label. To minimise error, we should
         // have predicted 1
         let prediction: Record<f64> = classification[Into::<usize>::into(label)];
@@ -335,6 +342,9 @@ impl <'a> NeuralNetworkTraining<'a> {
         // we predicted 0 for the true label, error is 1.
         let error: Record<f64> = Record::constant(1.0) - prediction;
         let derivatives = error.derivatives();
+        if debug {
+            log!("Error was {} for prediction {} for label {:?}", error.number, prediction.number, label);
+        }
         // update weights to minimise error, note that if error was 0 this
         // trivially does nothing
         self.weights[0].map_mut(|x| x - (derivatives[&x] * learning_rate));
@@ -362,10 +372,15 @@ impl <'a> NeuralNetworkTraining<'a> {
             indexes.drain(..).map(|(x, _)| x).collect()
         };
         let mut epoch_losses = 0.0;
+        let mut progress = 0;
         for i in random_index_order {
+            if progress % 100 == 0 {
+                log!("At {}th image", progress);
+            }
             epoch_losses += self.train(
-                &training_data.images[i], LEARNING_RATE, training_data.labels[i], history
+                &training_data.images[i], LEARNING_RATE, training_data.labels[i], history, progress % 100 == 0
             );
+            progress += 1;
         }
         epoch_losses / (training_data.images.len() as f64)
     }

@@ -31,7 +31,7 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
                 let image = training.images[i]
                 let label = training.labels[i]
                 let imageWasm = Image.new()
-                let pixels = new Uint8Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
+                let pixels = new Float64Array(memory.buffer, imageWasm.buffer(), WIDTH * HEIGHT)
                 // copy each pixel into the buffer exposed over Wasm to give it to
                 // the Rust code
                 for (let j = 0; j < WIDTH * HEIGHT; j++) {
