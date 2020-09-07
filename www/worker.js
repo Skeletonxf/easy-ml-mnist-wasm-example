@@ -15,7 +15,7 @@ let memory = null
 
 wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
     memory = mnistWasmModule.memory
-    const { Dataset, Image, NeuralNetwork, prepare } = wasm_bindgen;
+    const { Dataset, Image, NeuralNetwork, prepare } = wasm_bindgen
 
     let mnistWasm = Dataset.new()
     let network = NeuralNetwork.new()

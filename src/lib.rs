@@ -33,6 +33,16 @@ extern {
     fn alert(s: &str);
 }
 
+#[wasm_bindgen]
+extern {
+    fn logProgress(percent: f64);
+}
+
+fn log_progress(percent: f64) {
+    // FIXME: Avoid using a shim and actually call a JS function so can present on screen
+    log!("{}", percent);
+}
+
 const WIDTH: usize = 28;
 const HEIGHT: usize = 28;
 const TRAINING_SIZE: usize = 8000;
@@ -240,15 +250,12 @@ impl NeuralNetwork {
 
     /// Trains the neural net for 1 epoch and returns the average loss on the epoch
     pub fn train(&mut self, training_data: &Dataset) -> f64 {
-        log!("Creating WengertList");
+        log_progress(0.0);
         let history = WengertList::new();
-        log!("Creating training object");
         let mut training = NeuralNetworkTraining::from(&self, &history);
-        log!("Starting training");
         let loss = training.train_epoch(training_data, &history);
-        log!("Going to update self weights");
         training.update(self);
-        log!("Finished epoch");
+        log_progress(1.0);
         loss
     }
 }
@@ -367,7 +374,7 @@ impl <'a> NeuralNetworkTraining<'a> {
         let mut progress = 0;
         for i in random_index_order {
             if progress % 100 == 0 {
-                log!("At {}th image", progress);
+                log_progress(progress as f64 / (training_data.images.len() as f64));
             }
             epoch_losses += self.train(
                 &training_data.images[i], LEARNING_RATE, training_data.labels[i], history, progress % 100 == 0
