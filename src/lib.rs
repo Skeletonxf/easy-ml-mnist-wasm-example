@@ -36,11 +36,18 @@ extern {
 #[wasm_bindgen]
 extern {
     fn logProgress(percent: f64);
+    fn logBatchLoss(percent: f64);
 }
 
+/**
+ * Wraps the JavaScript function in a snake_case name
+ */
 fn log_progress(percent: f64) {
-    // FIXME: Avoid using a shim and actually call a JS function so can present on screen
-    log!("{}", percent);
+    logProgress(percent);
+}
+
+fn log_batch_loss(percent: f64) {
+    logBatchLoss(percent);
 }
 
 const WIDTH: usize = 28;
@@ -321,7 +328,7 @@ impl <'a> NeuralNetworkTraining<'a> {
 
     /// Classification is very similar for training, except we stay in floating point
     /// land so we can backprop the error. Returns the error on this image.
-    pub fn train(&mut self, image: &Image, learning_rate: f64, label: Digit, history: &'a WengertList<f64>, debug: bool) -> f64 {
+    pub fn train(&mut self, image: &Image, learning_rate: f64, label: Digit, history: &'a WengertList<f64>) -> f64 {
         let input: Matrix<f64> = image.clone().into();
         // this neural network is a simple feed forward architecture, so dot product
         // the input through the network weights and apply the sigmoid activation
@@ -341,9 +348,6 @@ impl <'a> NeuralNetworkTraining<'a> {
         // we predicted 0 for the true label, error is 1.
         let error: Record<f64> = Record::constant(1.0) - prediction;
         let derivatives = error.derivatives();
-        if debug {
-            log!("Error was {} for prediction {} for label {:?}", error.number, prediction.number, label);
-        }
         // update weights to minimise error, note that if error was 0 this
         // trivially does nothing
         self.weights[0].map_mut(|x| x - (derivatives[&x] * learning_rate));
@@ -371,14 +375,21 @@ impl <'a> NeuralNetworkTraining<'a> {
             indexes.drain(..).map(|(x, _)| x).collect()
         };
         let mut epoch_losses = 0.0;
+        let mut batch_losses = 0.0;
         let mut progress = 0;
         for i in random_index_order {
             if progress % 100 == 0 {
                 log_progress(progress as f64 / (training_data.images.len() as f64));
             }
-            epoch_losses += self.train(
-                &training_data.images[i], LEARNING_RATE, training_data.labels[i], history, progress % 100 == 0
+            let loss = self.train(
+                &training_data.images[i], LEARNING_RATE, training_data.labels[i], history
             );
+            epoch_losses += loss;
+            batch_losses += loss;
+            if progress % 100 == 0 && progress != 0 {
+                log_batch_loss(batch_losses / 100.0);
+                batch_losses = 0.0;
+            }
             progress += 1;
         }
         epoch_losses / (training_data.images.len() as f64)

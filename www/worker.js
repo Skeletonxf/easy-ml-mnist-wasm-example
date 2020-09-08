@@ -13,6 +13,20 @@ let testing = null
 
 let memory = null
 
+function logProgress(percent) {
+    postMessage({
+        progress: true,
+        percent: percent
+    })
+}
+
+function logBatchLoss(percent) {
+    postMessage({
+        batchLoss: true,
+        percent: percent
+    })
+}
+
 wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
     memory = mnistWasmModule.memory
     const { Dataset, Image, NeuralNetwork, prepare } = wasm_bindgen

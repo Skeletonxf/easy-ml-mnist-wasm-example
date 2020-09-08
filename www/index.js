@@ -57,6 +57,12 @@ drawMode.addEventListener('change', () => {
     drawCurrentImage()
 })
 
+let progressLabel = document.querySelector('label[for=trainingProgress]')
+let progressBar = document.querySelector('#trainingProgress')
+
+let chartList = document.querySelector('figure.chart ul')
+let pointsPlotted = 0
+
 let getColor = (color) => {
     if (drawNegative) {
         return `rgb(${color * 255}, ${color * 255}, ${color * 255})`
@@ -105,5 +111,16 @@ worker.onmessage = (event) => {
         nextButton.disabled = false
         previousButton.disabled = false
         drawMode.disabled = false
+    }
+    if (data.progress) {
+        progressBar.textContent = `${Math.round(data.percent * 1000) / 10}%`
+        progressBar.value = data.percent
+    }
+    if (data.batchLoss) {
+        let li = document.createElement('li')
+        li.style.left = `${pointsPlotted * 5}px`
+        li.style.bottom = `${data.percent * 300}px`
+        chartList.appendChild(li)
+        pointsPlotted += 1
     }
 }
