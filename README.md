@@ -40,3 +40,7 @@ changes.
 For further information on Rust and WebAssembly checkout the tutorials by the rust-wasm group.
 - https://rustwasm.github.io/docs/book/introduction.html
 - https://rustwasm.github.io/docs/wasm-pack/introduction.html
+
+## Screenshots
+
+<img src="../master/screenshots/webpage.png?raw=true" height="250px"></img>
