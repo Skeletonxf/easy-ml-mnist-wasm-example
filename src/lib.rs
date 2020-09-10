@@ -54,7 +54,7 @@ const WIDTH: usize = 28;
 const HEIGHT: usize = 28;
 const TRAINING_SIZE: usize = 8000;
 const TESTING_SIZE: usize = 2000;
-const LEARNING_RATE: f64 = 0.1;
+const LEARNING_RATE: f64 = 0.25;
 
 /// mnist data is grayscale 0-1 range
 type Pixel = f64;
