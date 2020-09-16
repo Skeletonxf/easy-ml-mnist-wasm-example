@@ -54,7 +54,7 @@ const WIDTH: usize = 28;
 const HEIGHT: usize = 28;
 const TRAINING_SIZE: usize = 8000;
 const TESTING_SIZE: usize = 2000;
-const LEARNING_RATE: f64 = 0.25;
+const LEARNING_RATE: f64 = 0.1;
 
 /// mnist data is grayscale 0-1 range
 type Pixel = f64;
@@ -172,10 +172,17 @@ pub struct Dataset {
 
 #[wasm_bindgen]
 impl Dataset {
-    pub fn new() -> Dataset {
+    pub fn new_training() -> Dataset {
         Dataset {
             images: Vec::with_capacity(TRAINING_SIZE),
             labels: Vec::with_capacity(TRAINING_SIZE),
+        }
+    }
+
+    pub fn new_testing() -> Dataset {
+        Dataset {
+            images: Vec::with_capacity(TESTING_SIZE),
+            labels: Vec::with_capacity(TESTING_SIZE),
         }
     }
 
@@ -264,6 +271,19 @@ impl NeuralNetwork {
         training.update(self);
         log_progress(1.0);
         loss
+    }
+
+    /// Computes the accuracy on a dataset and returns the percent correctly classified
+    /// as a number between 0 and 1.
+    pub fn accuracy(&self, dataset: &Dataset) -> f64 {
+        let mut correct = 0;
+        for i in 0..dataset.images.len() {
+            let prediction = self.classify(&dataset.images[i]);
+            if prediction == dataset.labels[i] {
+                correct += 1;
+            }
+        }
+        (correct as f64) / (dataset.images.len() as f64)
     }
 }
 

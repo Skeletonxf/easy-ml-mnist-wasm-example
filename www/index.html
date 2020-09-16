@@ -80,13 +80,16 @@
         overflow-x: scroll;
         padding-bottom: 1em;
     }
+    article {
+        max-width: 60em;
+    }
     </style>
   </head>
   <body>
     <noscript>This page contains webassembly and JavaScript content, please enable JavaScript in your browser.</noscript>
     <script src="./bootstrap.js"></script>
     <button id="prepare">Prepare Data</button>
-    <button id="train">Train</button>
+    <button id="train">Train Epoch</button>
     <section id="imageViewer" class="flex column">
         <div class="flex">
             <div class="center">
@@ -117,6 +120,31 @@
         <figure class="chart">
             <ul></ul>
         </figure>
+    </section>
+    <section>
+        <p id="trainingAccuracy">Accuracy on Training Data:</p>
+        <p id="testingAccuracy">Accuracy on Testing Data:</p>
+    </section>
+    <section>
+        <article>
+            <h1>MNIST Dataset Training Page</h1>
+            <p>
+                This page includes WebAssembly code written in Rust that interacts
+                with a WebWorker to train a basic feedforward neural net on a
+                subset of the MNIST dataset. Tuning the model to reach better
+                accuracy is an exercice left to the reader.
+            </p>
+            <p>
+                The network model is currently tuned to reach 60% accuracy quickly,
+                within 2-3 epochs so as to demonstrate that it is in fact learning
+                and machine learning can be done in the browser.
+            </p>
+            <p>
+                The loss graph should be expected to be bumpy, because it plots
+                average loss on just the last 100 images seen, which on average
+                will only be 10 per class
+            </p>
+        </article>
     </section>
   </body>
 </html>

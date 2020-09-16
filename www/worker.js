@@ -31,7 +31,8 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
     memory = mnistWasmModule.memory
     const { Dataset, Image, NeuralNetwork, prepare } = wasm_bindgen
 
-    let mnistWasm = Dataset.new()
+    let trainingDataset = Dataset.new_training()
+    let testingDataset = Dataset.new_testing()
     let network = NeuralNetwork.new()
 
     let intoImage = (image) => {
@@ -56,13 +57,22 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
             for (let i = 0; i < training.images.length; i++) {
                 let image = training.images[i]
                 let label = training.labels[i]
-                mnistWasm.add(intoImage(image), label)
+                trainingDataset.add(intoImage(image), label)
             }
+
+            for (let i = 0; i < testing.images.length; i++) {
+                let image = testing.images[i]
+                let label = testing.labels[i]
+                testingDataset.add(intoImage(image), label)
+            }
+
             postMessage({ datasetPrepared: true })
+            postAccuracy()
         }
         if (data.trainEpoch) {
-            let loss = network.train(mnistWasm)
+            let loss = network.train(trainingDataset)
             postMessage({ trainedEpoch: true, loss: loss })
+            postAccuracy()
         }
         if (data.requestCurrentImage) {
             image = Math.min(Math.max(0, data.currentImage), TRAINING_SIZE - 1)
@@ -80,6 +90,16 @@ wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
     postMessage({
         loadedWorker: true
     })
+
+    let postAccuracy = () => {
+        let trainingAccuracy = network.accuracy(trainingDataset)
+        let testingAccuracy = network.accuracy(testingDataset)
+        postMessage({
+            accuracy: true,
+            trainingAccuracy: trainingAccuracy,
+            testingAccuracy: testingAccuracy
+        })
+    }
 })
 
 /**

@@ -63,6 +63,9 @@ let progressBar = document.querySelector('#trainingProgress')
 let chartList = document.querySelector('figure.chart ul')
 let pointsPlotted = 0
 
+let trainingAccuracy = document.querySelector('#trainingAccuracy')
+let testingAccuracy = document.querySelector('#testingAccuracy')
+
 let getColor = (color) => {
     if (drawNegative) {
         return `rgb(${color * 255}, ${color * 255}, ${color * 255})`
@@ -106,7 +109,7 @@ worker.onmessage = (event) => {
     }
     if (data.trainedEpoch) {
         console.log(`Loss: ${data.loss}`)
-        trainButton.textContent = 'Train'
+        trainButton.textContent = 'Train Epoch'
         trainButton.disabled = false
         nextButton.disabled = false
         previousButton.disabled = false
@@ -122,5 +125,9 @@ worker.onmessage = (event) => {
         li.style.bottom = `${data.percent * 300}px`
         chartList.appendChild(li)
         pointsPlotted += 1
+    }
+    if (data.accuracy) {
+        trainingAccuracy.textContent = `Accuracy on Training Data: ${Math.floor(data.trainingAccuracy * 100)}%`
+        testingAccuracy.textContent = `Accuracy on Testing Data: ${Math.floor(data.testingAccuracy * 100)}%`
     }
 }
