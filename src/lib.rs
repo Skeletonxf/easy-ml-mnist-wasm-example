@@ -56,7 +56,7 @@ const HEIGHT: usize = 28;
 const TRAINING_SIZE: usize = 8000;
 const TESTING_SIZE: usize = 2000;
 const LEARNING_RATE: f64 = 0.2;
-const LEARNING_RATE_DISCOUNT_FACTOR: f64 = 0.75;
+const LEARNING_RATE_DISCOUNT_FACTOR: f64 = 0.95;
 
 /// mnist data is grayscale 0-1 range
 type Pixel = f64;
@@ -317,7 +317,7 @@ struct NeuralNetworkTraining<'a> {
     learning_rate: f64,
 }
 
-const BATCH_SIZE: usize = 10;
+const BATCH_SIZE: usize = 20;
 
 impl <'a> NeuralNetworkTraining<'a> {
     /// Given a WengertList which will be used exclusively for training this struct,
@@ -425,7 +425,7 @@ impl <'a> NeuralNetworkTraining<'a> {
             let start = i;
             let end = cmp::min(random_index_order.len(), start + BATCH_SIZE);
             let batch_indexes = &random_index_order[start..end];
-            if progress % 10 == 0 {
+            if progress % 5 == 0 {
                 log_progress(i as f64 / (training_data.images.len() as f64));
             }
             // create a batch of tuples of referenced images and corresponding labels
@@ -434,10 +434,10 @@ impl <'a> NeuralNetworkTraining<'a> {
             let loss = self.train(batch, self.learning_rate, history);
             epoch_losses += loss;
             batch_losses += loss;
-            // Report progress to the Web Worker after every 100 images (10 batches
-            // for a BATCH_SIZE of 10).
-            if progress % 10 == 0 && progress != 0 {
-                log_batch_loss(batch_losses / 10.0);
+            // Report progress to the Web Worker after every 100 images (5 batches
+            // for a BATCH_SIZE of 20).
+            if progress % 5 == 0 && progress != 0 {
+                log_batch_loss(batch_losses / 5.0);
                 batch_losses = 0.0;
             }
             progress += 1;
