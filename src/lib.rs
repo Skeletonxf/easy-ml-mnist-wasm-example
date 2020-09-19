@@ -14,6 +14,7 @@ use easy_ml::numeric::extra::{Real};
 
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::cmp;
 
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
 macro_rules! log {
@@ -54,7 +55,8 @@ const WIDTH: usize = 28;
 const HEIGHT: usize = 28;
 const TRAINING_SIZE: usize = 8000;
 const TESTING_SIZE: usize = 2000;
-const LEARNING_RATE: f64 = 0.1;
+const LEARNING_RATE: f64 = 0.2;
+const LEARNING_RATE_DISCOUNT_FACTOR: f64 = 0.75;
 
 /// mnist data is grayscale 0-1 range
 type Pixel = f64;
@@ -197,6 +199,7 @@ impl Dataset {
 #[derive(Clone, Debug)]
 pub struct NeuralNetwork {
     weights: Vec<Matrix<f64>>,
+    epochs: i32,
     //buffer: Vec<f64>,
 }
 
@@ -234,6 +237,7 @@ impl NeuralNetwork {
         }
         NeuralNetwork {
             weights,
+            epochs: 0
             //buffer: Vec::with_capacity(0),
         }
     }
@@ -266,10 +270,11 @@ impl NeuralNetwork {
     pub fn train(&mut self, training_data: &Dataset) -> f64 {
         log_progress(0.0);
         let history = WengertList::new();
-        let mut training = NeuralNetworkTraining::from(&self, &history);
+        let mut training = NeuralNetworkTraining::from(&self, &history, self.epochs);
         let loss = training.train_epoch(training_data, &history);
         training.update(self);
         log_progress(1.0);
+        self.epochs += 1;
         loss
     }
 
@@ -309,12 +314,15 @@ impl NeuralNetwork {
 #[derive(Clone, Debug)]
 struct NeuralNetworkTraining<'a> {
     weights: Vec<Matrix<Record<'a, f64>>>,
+    learning_rate: f64,
 }
+
+const BATCH_SIZE: usize = 10;
 
 impl <'a> NeuralNetworkTraining<'a> {
     /// Given a WengertList which will be used exclusively for training this struct,
     /// and an existing configuration for weights, creates a new NeuralNetworkTraining
-    fn from(configuration: &NeuralNetwork, history: &'a WengertList<f64>) -> NeuralNetworkTraining<'a> {
+    fn from(configuration: &NeuralNetwork, history: &'a WengertList<f64>, epochs: i32) -> NeuralNetworkTraining<'a> {
         let mut weights = Vec::with_capacity(configuration.weights.len());
         for i in 0..configuration.weights.len() {
             weights.push(Matrix::empty(
@@ -330,6 +338,7 @@ impl <'a> NeuralNetworkTraining<'a> {
         }
         NeuralNetworkTraining {
             weights,
+            learning_rate: LEARNING_RATE * LEARNING_RATE_DISCOUNT_FACTOR.powi(epochs)
         }
     }
 
@@ -347,26 +356,36 @@ impl <'a> NeuralNetworkTraining<'a> {
     }
 
     /// Classification is very similar for training, except we stay in floating point
-    /// land so we can backprop the error. Returns the error on this image.
-    pub fn train(&mut self, image: &Image, learning_rate: f64, label: Digit, history: &'a WengertList<f64>) -> f64 {
-        let input: Matrix<f64> = image.clone().into();
-        // this neural network is a simple feed forward architecture, so dot product
-        // the input through the network weights and apply the sigmoid activation
-        // function each step, then take softmax to produce an output
-        let output = {
-            let i = input.map(|p| Record::constant(p));
-            let layer1 = (i * &self.weights[0]).map(sigmoid);
-            let layer2 = (layer1 * &self.weights[1]).map(sigmoid);
-            layer2 * &self.weights[2]
-        };
-        let classification = linear_algebra::softmax(output.row_major_iter());
-        //let classification = NeuralNetworkTraining::softmax(output.row_major_iter());
-        // Get what we predicted for the true label. To minimise error, we should
-        // have predicted 1
-        let prediction: Record<f64> = classification[Into::<usize>::into(label)];
-        // If we predicted 1 for the true label, error is 0, likewise, if
-        // we predicted 0 for the true label, error is 1.
-        let error: Record<f64> = Record::constant(1.0) - prediction;
+    /// land so we can backprop the error.
+    /// This function takes an iterator of Images and Digits, and updates the weights
+    /// after getting the errors on the entire batch, returning the average loss for
+    /// the batch.
+    pub fn train<I>(&mut self, batch: I, learning_rate: f64, history: &'a WengertList<f64>) -> f64
+    where I: Iterator<Item = (&'a Image, Digit)> {
+        let mut errors = Vec::with_capacity(BATCH_SIZE);
+        for (image, label) in batch {
+            let input: Matrix<f64> = image.clone().into();
+            // this neural network is a simple feed forward architecture, so dot product
+            // the input through the network weights and apply the sigmoid activation
+            // function each step, then take softmax to produce an output
+            let output = {
+                let i = input.map(|p| Record::constant(p));
+                let layer1 = (i * &self.weights[0]).map(sigmoid);
+                let layer2 = (layer1 * &self.weights[1]).map(sigmoid);
+                layer2 * &self.weights[2]
+            };
+            let classification = linear_algebra::softmax(output.row_major_iter());
+            //let classification = NeuralNetworkTraining::softmax(output.row_major_iter());
+            // Get what we predicted for the true label. To minimise error, we should
+            // have predicted 1
+            let prediction: Record<f64> = classification[Into::<usize>::into(label)];
+            // If we predicted 1 for the true label, error is 0, likewise, if
+            // we predicted 0 for the true label, error is 1.
+            let error: Record<f64> = Record::constant(1.0) - prediction;
+            errors.push(error);
+        }
+        let batch_size = errors.len();
+        let error: Record<f64> = errors.drain(..).sum();
         let derivatives = error.derivatives();
         // update weights to minimise error, note that if error was 0 this
         // trivially does nothing
@@ -378,12 +397,12 @@ impl <'a> NeuralNetworkTraining<'a> {
         self.weights[0].map_mut(Record::do_reset);
         self.weights[1].map_mut(Record::do_reset);
         self.weights[2].map_mut(Record::do_reset);
-        error.number
+        error.number / (batch_size as f64)
     }
 
-    /// Performs SGD for one epoch on all of the training data in a random order, returning
-    /// the average loss.
-    pub fn train_epoch(&mut self, training_data: &Dataset, history: &'a WengertList<f64>) -> f64 {
+    /// Performs minibatch SGD for one epoch on all of the training data in a random order,
+    /// returning the average loss for the entire epoch.
+    pub fn train_epoch(&mut self, training_data: &'a Dataset, history: &'a WengertList<f64>) -> f64 {
         let random_numbers = EndlessRandomGenerator {};
         let random_index_order: Vec<usize> = {
             let mut indexes: Vec<(usize, f64)> = (0..training_data.images.len())
@@ -397,20 +416,35 @@ impl <'a> NeuralNetworkTraining<'a> {
         let mut epoch_losses = 0.0;
         let mut batch_losses = 0.0;
         let mut progress = 0;
-        for i in random_index_order {
-            if progress % 100 == 0 {
-                log_progress(progress as f64 / (training_data.images.len() as f64));
+        let mut i = 0;
+        loop {
+            // compute the start and end indexes which will slice the random_index_order vec
+            // to obtain a slice of indexes into the training data. Until reaching the end
+            // of the datsset this will always be BATCH_SIZE, but may be smaller on the final
+            // one.
+            let start = i;
+            let end = cmp::min(random_index_order.len(), start + BATCH_SIZE);
+            let batch_indexes = &random_index_order[start..end];
+            if progress % 10 == 0 {
+                log_progress(i as f64 / (training_data.images.len() as f64));
             }
-            let loss = self.train(
-                &training_data.images[i], LEARNING_RATE, training_data.labels[i], history
-            );
+            // create a batch of tuples of referenced images and corresponding labels
+            let batch = batch_indexes.iter()
+                .map(|&index| (&training_data.images[index], training_data.labels[index]));
+            let loss = self.train(batch, self.learning_rate, history);
             epoch_losses += loss;
             batch_losses += loss;
-            if progress % 100 == 0 && progress != 0 {
-                log_batch_loss(batch_losses / 100.0);
+            // Report progress to the Web Worker after every 100 images (10 batches
+            // for a BATCH_SIZE of 10).
+            if progress % 10 == 0 && progress != 0 {
+                log_batch_loss(batch_losses / 10.0);
                 batch_losses = 0.0;
             }
             progress += 1;
+            if end == random_index_order.len() {
+                break;
+            }
+            i += BATCH_SIZE;
         }
         epoch_losses / (training_data.images.len() as f64)
     }
