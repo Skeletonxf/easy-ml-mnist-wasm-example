@@ -5,6 +5,17 @@ Simple MNIST Neural Network scaffold for demonstrating Rust code in the browser.
 Uses `wasm-pack` to build the web assembly. The webpage can be accessed by
 running the included Node.js server.
 
+## About
+
+This project is a template for doing machine learning in the browser via Rust
+code loaded as WebAssembly. The code trains a simple feedforward neural network
+on a subset of the MNIST data using [Easy ML](https://crates.io/crates/easy-ml)
+with mini batching and automatic differentiation.
+
+## Screenshots
+
+<img src="../master/screenshots/webpage.png?raw=true" height="250px"></img>
+
 ## Limitations
 
 At the time of writing,
@@ -40,7 +51,3 @@ changes.
 For further information on Rust and WebAssembly checkout the tutorials by the rust-wasm group.
 - https://rustwasm.github.io/docs/book/introduction.html
 - https://rustwasm.github.io/docs/wasm-pack/introduction.html
-
-## Screenshots
-
-<img src="../master/screenshots/webpage.png?raw=true" height="250px"></img>
