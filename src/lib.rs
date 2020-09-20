@@ -437,7 +437,14 @@ impl <'a> NeuralNetworkTraining<'a> {
             // Report progress to the Web Worker after every 100 images (5 batches
             // for a BATCH_SIZE of 20).
             if progress % 5 == 0 && progress != 0 {
-                log_batch_loss(batch_losses / 5.0);
+                if progress == 5 {
+                    // 1 additional batch of images is summed in the first progress
+                    // report because we don't report the loss on the first batch
+                    // even though 0 % 5 == 0, so divide by 6 to get average loss
+                    log_batch_loss(batch_losses / 6.0);
+                } else {
+                    log_batch_loss(batch_losses / 5.0);
+                }
                 batch_losses = 0.0;
             }
             progress += 1;
@@ -446,7 +453,7 @@ impl <'a> NeuralNetworkTraining<'a> {
             }
             i += BATCH_SIZE;
         }
-        epoch_losses / (training_data.images.len() as f64)
+        epoch_losses / (training_data.images.len() as f64 / BATCH_SIZE as f64)
     }
 }
 
