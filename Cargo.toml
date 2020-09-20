@@ -26,7 +26,7 @@ console_error_panic_hook = { version = "0.1.6", optional = true }
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
 # wee_alloc = { version = "0.4.5", optional = true }
 
-easy-ml = { git = "https://github.com/Skeletonxf/easy-ml" }
+easy-ml = "1"
 
 [dependencies.web-sys]
 version = "0.3"
