@@ -32,6 +32,6 @@
     "mnist": "^1.1.0",
     "webpack": "^4.44.1",
     "webpack-cli": "^3.1.0",
-    "webpack-dev-server": "^3.1.5"
+    "webpack-dev-server": "^3.11.2"
   }
 }
