@@ -51,3 +51,7 @@ changes.
 For further information on Rust and WebAssembly checkout the tutorials by the rust-wasm group.
 - https://rustwasm.github.io/docs/book/introduction.html
 - https://rustwasm.github.io/docs/wasm-pack/introduction.html
+
+## License
+
+This code in this project that is mine (a bit of the code in this repo comes from the MIT/APACHE templates this project was made from) is also dual licensed under the MIT and APACHE licenses. Do note that the Easy ML dependency this project uses is licensed under the MPL2 license.
