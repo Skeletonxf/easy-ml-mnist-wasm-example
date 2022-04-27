@@ -1,6 +1,5 @@
+node_modules
+/dist
 /target
-**/*.rs.bk
-bin/
-pkg/
-wasm-pack.log
-node_modules/
+/www/pkg
+/wasm-pack.log

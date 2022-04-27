@@ -33,18 +33,54 @@ If you're reading this in the future, and ES6 imports are widely available in
 Web Workers then please open an issue so I can update the template to use
 module imports.
 
-## Running
+## Template instructions
 
-First generate the web assembly by running
-`wasm-pack build --target no-modules --out-dir www/pkg`. Then `cd www` and
-run `npm install` to install the server, then `npm run start` to launch it.
+### How to install
 
-Open `http://localhost:8080/`
+```sh
+npm install
+```
 
-The webpack dev server will automatically reload JavaScript when you edit it,
-but the Rust code must be manually rebuilt with
-`wasm-pack build --target no-modules --out-dir www/pkg` ran from the root of the project directory each time you make
-changes.
+### How to run in debug mode
+
+```sh
+# Builds the project and opens it in a new browser tab. Auto-reloads when the project changes.
+npm start
+```
+
+### How to build in release mode
+
+```sh
+# Builds the project and places it into the `dist` folder.
+npm run build
+```
+
+### How to run unit tests
+
+```sh
+# Runs tests in Firefox
+npm test -- --firefox
+
+# Runs tests in Chrome
+npm test -- --chrome
+
+# Runs tests in Safari
+npm test -- --safari
+```
+
+### What does each file do?
+
+* `Cargo.toml` contains the standard Rust metadata. You put your Rust dependencies in here. You must change this file with your details (name, description, version, authors, categories)
+
+* `package.json` contains the standard npm metadata. You put your JavaScript dependencies in here. You must change this file with your details (author, name, version)
+
+* `webpack.config.js` contains the Webpack configuration. You shouldn't need to change this, unless you have very special needs.
+
+* The `src` folder contains your Rust code.
+
+* The `static` folder contains any files that you want copied as-is into the final build. It contains an `index.html` file which loads the `index.js` file.
+
+* The `tests` folder contains your Rust unit tests.
 
 ## Background info
 

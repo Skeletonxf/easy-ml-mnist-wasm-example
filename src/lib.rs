@@ -1,22 +1,28 @@
-mod utils;
-
 use wasm_bindgen::prelude::*;
-
-extern crate web_sys;
-extern crate easy_ml;
-extern crate js_sys;
 
 use easy_ml::matrices::Matrix;
 use easy_ml::differentiation::{Record, WengertList};
 use easy_ml::linear_algebra;
-use easy_ml::numeric::{Numeric};
-use easy_ml::numeric::extra::{Real};
+use easy_ml::numeric::Numeric;
+use easy_ml::numeric::extra::Real;
 
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::cmp;
 
+// This is like the `main` function, except for JavaScript.
+#[wasm_bindgen(start)]
+pub fn main_js() -> Result<(), JsValue> {
+    // This provides better error messages in debug mode.
+    // It's disabled in release mode so it doesn't bloat up the file size.
+    #[cfg(debug_assertions)]
+    console_error_panic_hook::set_once();
+
+    Ok(())
+}
+
 // A macro to provide `println!(..)`-style syntax for `console.log` logging.
+#[allow(unused)]
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
@@ -455,11 +461,6 @@ impl <'a> NeuralNetworkTraining<'a> {
         }
         epoch_losses / (training_data.images.len() as f64 / BATCH_SIZE as f64)
     }
-}
-
-#[wasm_bindgen]
-pub fn prepare() {
-    utils::set_panic_hook();
 }
 
 struct EndlessRandomGenerator {}

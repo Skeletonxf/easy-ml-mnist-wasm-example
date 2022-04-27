@@ -29,7 +29,7 @@ previousButton.addEventListener('click', () => {
     drawCurrentImage()
 })
 
-let worker = new Worker('worker.js', { type: 'module' })
+let worker = new Worker('worker.js', { type: 'classic' })
 
 let drawCurrentImage = () => {
     worker.postMessage({ requestCurrentImage: true, currentImage: image })

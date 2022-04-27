@@ -1,7 +1,7 @@
 importScripts('pkg/mnist_wasm.js')
 // hack to make mnist.js load correctly in a web worker environment
 var window = self
-importScripts('node_modules/mnist/dist/mnist.js')
+importScripts('data/mnist.js') // FIXME: We should be able to programmatically copy this file out of node_modules instead of vendoring it
 
 const WIDTH = 28
 const HEIGHT = 28
@@ -29,7 +29,7 @@ function logBatchLoss(percent) {
 
 wasm_bindgen('pkg/mnist_wasm_bg.wasm').then(mnistWasmModule => {
     memory = mnistWasmModule.memory
-    const { Dataset, Image, NeuralNetwork, prepare } = wasm_bindgen
+    const { Dataset, Image, NeuralNetwork } = wasm_bindgen
 
     let trainingDataset = Dataset.new_training()
     let testingDataset = Dataset.new_testing()
