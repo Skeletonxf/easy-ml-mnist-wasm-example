@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use easy_ml::matrices::Matrix;
-use easy_ml::differentiation::{Record, WengertList};
+use easy_ml::differentiation::{Record, RecordMatrix, WengertList};
 use easy_ml::linear_algebra;
 use easy_ml::numeric::Numeric;
 use easy_ml::numeric::extra::Real;
