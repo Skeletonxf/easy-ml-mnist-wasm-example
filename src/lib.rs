@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use easy_ml::matrices::Matrix;
-use easy_ml::differentiation::{Record, RecordMatrix, WengertList};
+use easy_ml::differentiation::{Record, RecordMatrix, WengertList, Index};
 use easy_ml::linear_algebra;
 use easy_ml::numeric::Numeric;
 use easy_ml::numeric::extra::Real;
@@ -319,7 +319,7 @@ impl NeuralNetwork {
 /// not a huge issue, because Records are only needed for training anyway.
 #[derive(Clone, Debug)]
 struct NeuralNetworkTraining<'a> {
-    weights: Vec<Matrix<Record<'a, f64>>>,
+    weights: Vec<RecordMatrix<'a, f64, Matrix<(f64, Index)>>>,
     learning_rate: f64,
 }
 
@@ -331,16 +331,15 @@ impl <'a> NeuralNetworkTraining<'a> {
     fn from(configuration: &NeuralNetwork, history: &'a WengertList<f64>, epochs: i32) -> NeuralNetworkTraining<'a> {
         let mut weights = Vec::with_capacity(configuration.weights.len());
         for i in 0..configuration.weights.len() {
-            weights.push(Matrix::empty(
-                Record::variable(0.0, &history),
-                configuration.weights[i].size()
-            ));
-            for j in 0..configuration.weights[i].size().0 {
-                for k in 0..configuration.weights[i].size().1 {
-                    let neuron = configuration.weights[i].get(j, k);
-                    weights[i].set(j, k, Record::variable(neuron, &history));
-                }
-            }
+            weights.push(
+                RecordMatrix::variables(
+                    &history,
+                    Matrix::from_fn(
+                        configuration.weights[i].size(),
+                        |(j, k)| configuration.weights[i].get(j, k)
+                    )
+                )
+            );
         }
         NeuralNetworkTraining {
             weights,
@@ -351,12 +350,9 @@ impl <'a> NeuralNetworkTraining<'a> {
     /// Updates an existing neural network configuration to the new weights
     /// learned through training.
     fn update(&self, configuration: &mut NeuralNetwork) {
-        for i in 0..self.weights.len() {
-            for j in 0..self.weights[i].size().0 {
-                for k in 0..self.weights[i].size().1 {
-                    let neuron = self.weights[i].get(j, k).number;
-                    configuration.weights[i].set(j, k, neuron);
-                }
+        for (i, weights) in self.weights.iter().enumerate() {
+            for ((j, k), (neuron, _)) in weights.view().row_major_iter().with_index() {
+                configuration.weights[i].set(j, k, neuron);
             }
         }
     }
@@ -370,17 +366,25 @@ impl <'a> NeuralNetworkTraining<'a> {
     where I: Iterator<Item = (&'a Image, Digit)> {
         let mut errors = Vec::with_capacity(BATCH_SIZE);
         for (image, label) in batch {
-            let input: Matrix<f64> = image.clone().into();
+            let image: Matrix<f64> = image.clone().into();
+            let input: RecordMatrix<f64, _> = RecordMatrix::constants(image);
             // this neural network is a simple feed forward architecture, so dot product
             // the input through the network weights and apply the sigmoid activation
             // function each step, then take softmax to produce an output
             let output = {
-                let i = input.map(|p| Record::constant(p));
-                let layer1 = (i * &self.weights[0]).map(sigmoid);
-                let layer2 = (layer1 * &self.weights[1]).map(sigmoid);
+                let layer1 = RecordMatrix::from_iter(
+                    (input.size().0, self.weights[0].size().1),
+                    (input * (&self.weights[0])).iter_row_major_as_records().map(sigmoid)
+                ).unwrap(); // TODO: map method on RecordMatrix to simplify this .map(sigmoid);
+                let layer2 = RecordMatrix::from_iter(
+                    (layer1.size().0, self.weights[1].size().1),
+                    (layer1 * &self.weights[1]).iter_row_major_as_records().map(sigmoid)
+                ).unwrap(); // TODO: map method
                 layer2 * &self.weights[2]
             };
-            let classification = linear_algebra::softmax(output.row_major_iter());
+            let classification = linear_algebra::softmax(
+                output.iter_row_major_as_records()
+            );
             //let classification = NeuralNetworkTraining::softmax(output.row_major_iter());
             // Get what we predicted for the true label. To minimise error, we should
             // have predicted 1
@@ -395,14 +399,28 @@ impl <'a> NeuralNetworkTraining<'a> {
         let derivatives = error.derivatives();
         // update weights to minimise error, note that if error was 0 this
         // trivially does nothing
-        self.weights[0].map_mut(|x| x - (derivatives[&x] * learning_rate));
-        self.weights[1].map_mut(|x| x - (derivatives[&x] * learning_rate));
-        self.weights[2].map_mut(|x| x - (derivatives[&x] * learning_rate));
+        use easy_ml::matrices::views::MatrixView;
+        // TODO: map_mut method
+        MatrixView::from(&mut self.weights[0]).map_mut(|r| {
+            let x = Record::from_existing(r, Some(history));
+            let new = x - (derivatives[&x] * learning_rate);
+            (new.number, new.index)
+        });
+        MatrixView::from(&mut self.weights[1]).map_mut(|r| {
+            let x = Record::from_existing(r, Some(history));
+            let new = x - (derivatives[&x] * learning_rate);
+            (new.number, new.index)
+        });
+        MatrixView::from(&mut self.weights[2]).map_mut(|r| {
+            let x = Record::from_existing(r, Some(history));
+            let new = x - (derivatives[&x] * learning_rate);
+            (new.number, new.index)
+        });
         // reset gradients
         history.clear();
-        self.weights[0].map_mut(Record::do_reset);
-        self.weights[1].map_mut(Record::do_reset);
-        self.weights[2].map_mut(Record::do_reset);
+        self.weights[0].reset();
+        self.weights[1].reset();
+        self.weights[2].reset();
         error.number / (batch_size as f64)
     }
 
