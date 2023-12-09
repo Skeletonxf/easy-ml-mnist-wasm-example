@@ -33,7 +33,7 @@ dependencies = [
 [[package]]
 name = "easy-ml"
 version = "1.10.0-dev"
-source = "git+https://github.com/Skeletonxf/easy-ml#4bbb7c0e6d55ae87f13b6f1be96358a5d696cfcb"
+source = "git+https://github.com/Skeletonxf/easy-ml#e655809d0aef2e05a8bbc14722f0a5202fa79967"
 
 [[package]]
 name = "futures"
@@ -72,9 +72,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.18.0"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
+checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
 name = "proc-macro2"

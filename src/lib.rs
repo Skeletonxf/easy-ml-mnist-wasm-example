@@ -372,14 +372,12 @@ impl <'a> NeuralNetworkTraining<'a> {
             // the input through the network weights and apply the sigmoid activation
             // function each step, then take softmax to produce an output
             let output = {
-                let layer1 = RecordMatrix::from_iter(
-                    (input.size().0, self.weights[0].size().1),
-                    (input * (&self.weights[0])).iter_row_major_as_records().map(sigmoid)
-                ).unwrap(); // TODO: map method on RecordMatrix to simplify this .map(sigmoid);
-                let layer2 = RecordMatrix::from_iter(
-                    (layer1.size().0, self.weights[1].size().1),
-                    (layer1 * &self.weights[1]).iter_row_major_as_records().map(sigmoid)
-                ).unwrap(); // TODO: map method
+                let layer1 = (input * &self.weights[0])
+                    .map(sigmoid)
+                    .expect("Sigmoid should not cause inconsistent histories");
+                let layer2 = (layer1 * &self.weights[1])
+                    .map(sigmoid)
+                    .expect("Sigmoid should not cause inconsistent histories");
                 layer2 * &self.weights[2]
             };
             let classification = linear_algebra::softmax(
