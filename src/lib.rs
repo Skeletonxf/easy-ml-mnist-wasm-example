@@ -397,23 +397,12 @@ impl <'a> NeuralNetworkTraining<'a> {
         let derivatives = error.derivatives();
         // update weights to minimise error, note that if error was 0 this
         // trivially does nothing
-        use easy_ml::matrices::views::MatrixView;
-        // TODO: map_mut method
-        MatrixView::from(&mut self.weights[0]).map_mut(|r| {
-            let x = Record::from_existing(r, Some(history));
-            let new = x - (derivatives[&x] * learning_rate);
-            (new.number, new.index)
-        });
-        MatrixView::from(&mut self.weights[1]).map_mut(|r| {
-            let x = Record::from_existing(r, Some(history));
-            let new = x - (derivatives[&x] * learning_rate);
-            (new.number, new.index)
-        });
-        MatrixView::from(&mut self.weights[2]).map_mut(|r| {
-            let x = Record::from_existing(r, Some(history));
-            let new = x - (derivatives[&x] * learning_rate);
-            (new.number, new.index)
-        });
+        self.weights[0].map_mut(|x| x - (derivatives[&x] * learning_rate))
+            .expect("updating 0 weights should not cause inconsistent histories");
+        self.weights[1].map_mut(|x| x - (derivatives[&x] * learning_rate))
+            .expect("updating 1 weights should not cause inconsistent histories");
+        self.weights[2].map_mut(|x| x - (derivatives[&x] * learning_rate))
+            .expect("updating 2 weights should not cause inconsistent histories");
         // reset gradients
         history.clear();
         self.weights[0].reset();
