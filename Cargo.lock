@@ -32,9 +32,9 @@ dependencies = [
 
 [[package]]
 name = "easy-ml"
-version = "1.10.0"
+version = "2.0.0-dev.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c077aa4768ccee4811f5d919664800a3d6cf0976b944a8ba3f67a14651f6a3a1"
+checksum = "2f13ab7c71b750458e9dee18970069b648ff8292f7b86da4caf46463581fe950"
 
 [[package]]
 name = "futures"
