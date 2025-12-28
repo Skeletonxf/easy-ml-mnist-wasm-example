@@ -19,7 +19,7 @@ with mini batching and automatic differentiation.
 ## Limitations
 
 At the time of writing,
-[there is not widespread support](https://caniuse.com/#feat=mdn-javascript_statements_import_worker_support)
+[there was not widespread support](https://caniuse.com/#feat=mdn-javascript_statements_import_worker_support)
 for ES6 module imports in Web Workers. Hence, this scaffold uses
 `importScripts` to import the web assembly in the web worker, and
 `wasm-pack build --target no-modules --out-dir www/pkg` to generate the web
