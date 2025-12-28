@@ -30,7 +30,7 @@ lto = true
 #default = ["wee_alloc"]
 
 [dependencies]
-easy-ml = "2.0"
+easy-ml = "2.1"
 
 # The `wasm-bindgen` crate provides the bare minimum functionality needed
 # to interact with JavaScript.
