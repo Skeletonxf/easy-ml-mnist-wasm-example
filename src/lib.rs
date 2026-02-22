@@ -1,5 +1,7 @@
 use wasm_bindgen::prelude::*;
 
+use js_sys::{Float64Array, Function};
+
 use easy_ml::matrices::Matrix;
 use easy_ml::differentiation::{Record, RecordMatrix, WengertList, Index};
 use easy_ml::linear_algebra;
@@ -41,21 +43,29 @@ extern {
 }
 
 #[wasm_bindgen]
-extern {
-    fn logProgress(percent: f64);
-    fn logBatchLoss(percent: f64);
+pub fn greet() {
+    alert("Hello, mnist-wasm!");
 }
 
-/**
- * Wraps the JavaScript function in a snake_case name
- */
-fn log_progress(percent: f64) {
-    logProgress(percent);
-}
-
-fn log_batch_loss(percent: f64) {
-    logBatchLoss(percent);
-}
+// FIXME: Can't seem to provide these from JS to Rust anymore with the new import syntax
+// WebAssembly.instantiateStreaming seems like the obvious API to use to provide the
+// JS functions, but then we can't fetch the wasm anymore so that doesn't work either?
+// #[wasm_bindgen]
+// extern {
+//     fn logProgress(percent: f64);
+//     fn logBatchLoss(percent: f64);
+// }
+//
+// /**
+//  * Wraps the JavaScript function in a snake_case name
+//  */
+// fn log_progress(percent: f64) {
+//     logProgress(percent);
+// }
+//
+// fn log_batch_loss(percent: f64) {
+//     logBatchLoss(percent);
+// }
 
 const WIDTH: usize = 28;
 const HEIGHT: usize = 28;
@@ -75,22 +85,13 @@ pub struct Image {
 
 #[wasm_bindgen]
 impl Image {
-    /// Creates a new Image
-    pub fn new() -> Image {
+    /// Creates a new Image from an array of the appropriate size in row major order.
+    pub fn new(data: Float64Array) -> Image {
+        let as_vec = data.to_vec();
+        assert!(as_vec.len() == WIDTH * HEIGHT, "Array must be 28x28 in size");
         Image {
-            data: Vec::with_capacity(WIDTH * HEIGHT),
+            data: as_vec,
         }
-    }
-
-    /// Accesses the data buffer of this Image, for JavaScript to fill with the actual data
-    pub fn buffer(&mut self) -> *const Pixel {
-        self.data.as_ptr()
-    }
-
-    pub fn set_length(&mut self) {
-        // this is safe because we will only call it after initialising all elements
-        // via buffer access on the JS side
-        unsafe { self.data.set_len(WIDTH * HEIGHT); }
     }
 }
 
@@ -206,7 +207,8 @@ impl Dataset {
 pub struct NeuralNetwork {
     weights: Vec<Matrix<f64>>,
     epochs: i32,
-    //buffer: Vec<f64>,
+    log_progress: Function,
+    log_batch_loss: Function,
 }
 
 const FIRST_HIDDEN_LAYER_SIZE: usize = 128;
@@ -228,7 +230,10 @@ fn sigmoid<T: Numeric + Real+ Copy>(x: T) -> T {
 impl NeuralNetwork {
     /// Creates a new Neural Network configuration of randomised weights
     /// and a simple feed forward architecture.
-    pub fn new() -> NeuralNetwork {
+    pub fn new(
+        log_progress: Function,
+        log_batch_loss: Function,
+    ) -> NeuralNetwork {
         let mut weights = vec![
             Matrix::empty(0.0, (WIDTH * HEIGHT, FIRST_HIDDEN_LAYER_SIZE)),
             Matrix::empty(0.0, (FIRST_HIDDEN_LAYER_SIZE, SECOND_HIDDEN_LAYER_SIZE)),
@@ -243,7 +248,9 @@ impl NeuralNetwork {
         }
         NeuralNetwork {
             weights,
-            epochs: 0
+            epochs: 0,
+            log_progress,
+            log_batch_loss,
             //buffer: Vec::with_capacity(0),
         }
     }
@@ -274,12 +281,12 @@ impl NeuralNetwork {
 
     /// Trains the neural net for 1 epoch and returns the average loss on the epoch
     pub fn train(&mut self, training_data: &Dataset) -> f64 {
-        log_progress(0.0);
+        self.log_progress.call1(&JsValue::NULL, &JsValue::from(0.0));
         let history = WengertList::new();
-        let mut training = NeuralNetworkTraining::from(&self, &history, self.epochs);
+        let mut training = NeuralNetworkTraining::from(&self, &history, self.epochs, &self.log_progress, &self.log_batch_loss);
         let loss = training.train_epoch(training_data, &history);
-        training.update(self);
-        log_progress(1.0);
+        training.update(&mut self.weights);
+        self.log_progress.call1(&JsValue::NULL, &JsValue::from(1.0));
         self.epochs += 1;
         loss
     }
@@ -321,6 +328,8 @@ impl NeuralNetwork {
 struct NeuralNetworkTraining<'a> {
     weights: Vec<RecordMatrix<'a, f64, Matrix<(f64, Index)>>>,
     learning_rate: f64,
+    log_progress: &'a Function,
+    log_batch_loss: &'a Function,
 }
 
 const BATCH_SIZE: usize = 20;
@@ -328,7 +337,13 @@ const BATCH_SIZE: usize = 20;
 impl <'a> NeuralNetworkTraining<'a> {
     /// Given a WengertList which will be used exclusively for training this struct,
     /// and an existing configuration for weights, creates a new NeuralNetworkTraining
-    fn from(configuration: &NeuralNetwork, history: &'a WengertList<f64>, epochs: i32) -> NeuralNetworkTraining<'a> {
+    fn from(
+        configuration: &NeuralNetwork,
+        history: &'a WengertList<f64>,
+        epochs: i32,
+        log_progress: &'a Function,
+        log_batch_loss: &'a Function,
+    ) -> NeuralNetworkTraining<'a> {
         let mut weights = Vec::with_capacity(configuration.weights.len());
         for i in 0..configuration.weights.len() {
             weights.push(
@@ -343,16 +358,18 @@ impl <'a> NeuralNetworkTraining<'a> {
         }
         NeuralNetworkTraining {
             weights,
-            learning_rate: LEARNING_RATE * LEARNING_RATE_DISCOUNT_FACTOR.powi(epochs)
+            learning_rate: LEARNING_RATE * LEARNING_RATE_DISCOUNT_FACTOR.powi(epochs),
+            log_progress,
+            log_batch_loss,
         }
     }
 
     /// Updates an existing neural network configuration to the new weights
     /// learned through training.
-    fn update(&self, configuration: &mut NeuralNetwork) {
+    fn update(&self, network_weights: &mut Vec<Matrix<f64>>) {
         for (i, weights) in self.weights.iter().enumerate() {
             for ((j, k), (neuron, _)) in weights.view().row_major_iter().with_index() {
-                configuration.weights[i].set(j, k, neuron);
+                network_weights[i].set(j, k, neuron);
             }
         }
     }
@@ -437,7 +454,7 @@ impl <'a> NeuralNetworkTraining<'a> {
             let end = cmp::min(random_index_order.len(), start + BATCH_SIZE);
             let batch_indexes = &random_index_order[start..end];
             if progress % 5 == 0 {
-                log_progress(i as f64 / (training_data.images.len() as f64));
+                self.log_progress.call1(&JsValue::NULL, &JsValue::from(i as f64 / (training_data.images.len() as f64)));
             }
             // create a batch of tuples of referenced images and corresponding labels
             let batch = batch_indexes.iter()
@@ -452,9 +469,9 @@ impl <'a> NeuralNetworkTraining<'a> {
                     // 1 additional batch of images is summed in the first progress
                     // report because we don't report the loss on the first batch
                     // even though 0 % 5 == 0, so divide by 6 to get average loss
-                    log_batch_loss(batch_losses / 6.0);
+                    self.log_batch_loss.call1(&JsValue::NULL, &JsValue::from(batch_losses / 6.0));
                 } else {
-                    log_batch_loss(batch_losses / 5.0);
+                    self.log_batch_loss.call1(&JsValue::NULL, &JsValue::from(batch_losses / 5.0));
                 }
                 batch_losses = 0.0;
             }

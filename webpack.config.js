@@ -27,9 +27,12 @@ module.exports = {
 
     new WasmPackPlugin({
       crateDirectory: __dirname,
-      extraArgs: '--target no-modules', // our wasm is used in a Web Worker not as an ES6 module
+      extraArgs: '--target web', // our wasm is used in a Web Worker as an ES6 module
       outName: 'mnist_wasm',
       outDir: "www/pkg",
     }),
-  ]
+  ],
+  experiments: {
+    asyncWebAssembly: true
+  }
 };

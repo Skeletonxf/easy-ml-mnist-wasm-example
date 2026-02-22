@@ -35,7 +35,7 @@ previousButton.addEventListener('click', () => {
     drawCurrentImage()
 })
 
-let worker = new Worker('worker.js', { type: 'classic' })
+let worker = new Worker('worker.js', { type: 'module' })
 
 let drawCurrentImage = () => {
     worker.postMessage({ requestCurrentImage: true, currentImage: image })
@@ -45,7 +45,14 @@ let prepareButton = document.querySelector('#prepare')
 prepareButton.disabled = true
 prepareButton.textContent = 'Loading'
 prepareButton.addEventListener('click', () => {
-    worker.postMessage({ prepareDataset: true })
+    worker.postMessage({
+        prepareDataset: true,
+        // The mnist.js dependency is really old and seems to have trouble
+        // being imported as a module for our web worker. We can work around
+        // this by using as a regular JavaScript file and passing the data
+        // to our worker when we tell it to start.
+        data: mnist.set(TRAINING_SIZE, TESTING_SIZE)
+    })
 })
 
 trainButton.addEventListener('click', () => {
