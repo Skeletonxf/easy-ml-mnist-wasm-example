@@ -84,9 +84,10 @@ npm test -- --safari
 
 ## Background info
 
-For further information on Rust and WebAssembly checkout the tutorials by the rust-wasm group.
-- https://rustwasm.github.io/docs/book/introduction.html
-- https://rustwasm.github.io/docs/wasm-pack/introduction.html
+For further information on Rust and WebAssembly checkout the tutorials:
+- https://wasm-bindgen.github.io/wasm-bindgen/
+- https://docs.rs/wasm-bindgen/latest/wasm_bindgen/
+- https://drager.github.io/wasm-pack/book/introduction.html
 
 ## License
 
