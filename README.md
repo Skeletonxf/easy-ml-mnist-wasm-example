@@ -16,23 +16,6 @@ with mini batching and automatic differentiation.
 
 <img src="../master/screenshots/webpage.png?raw=true" height="250px"></img>
 
-## Limitations
-
-At the time of writing,
-[there was not widespread support](https://caniuse.com/#feat=mdn-javascript_statements_import_worker_support)
-for ES6 module imports in Web Workers. Hence, this scaffold uses
-`importScripts` to import the web assembly in the web worker, and
-`wasm-pack build --target no-modules --out-dir www/pkg` to generate the web
-assembly and JavaScript code for the Web Worker to import.
-
-This makes the code a little less nice than if we could use ES6 modules
-everywhere, but is worth it as training a machine learning system in the
-main loop will almost certainly freeze up the browser or web page.
-
-If you're reading this in the future, and ES6 imports are widely available in
-Web Workers then please open an issue so I can update the template to use
-module imports.
-
 ## Template instructions
 
 ### How to install
@@ -45,7 +28,7 @@ npm install
 
 ```sh
 # Builds the project and opens it in a new browser tab. Auto-reloads when the project changes.
-npm start
+npm run start
 ```
 
 ### How to build in release mode
