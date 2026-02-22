@@ -20,12 +20,18 @@ let nextButton = document.querySelector('#next')
 nextButton.disabled = true
 nextButton.addEventListener('click', () => {
     image += 1
+    if (image > TRAINING_SIZE - 1) {
+      image = 0
+    }
     drawCurrentImage()
 })
 let previousButton = document.querySelector('#previous')
 previousButton.disabled = true
 previousButton.addEventListener('click', () => {
     image -= 1
+    if (image < 0) {
+      image = TRAINING_SIZE - 1
+    }
     drawCurrentImage()
 })
 
