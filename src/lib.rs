@@ -281,12 +281,12 @@ impl NeuralNetwork {
 
     /// Trains the neural net for 1 epoch and returns the average loss on the epoch
     pub fn train(&mut self, training_data: &Dataset) -> f64 {
-        self.log_progress.call1(&JsValue::NULL, &JsValue::from(0.0));
+        let _ = self.log_progress.call1(&JsValue::NULL, &JsValue::from(0.0));
         let history = WengertList::new();
         let mut training = NeuralNetworkTraining::from(&self, &history, self.epochs, &self.log_progress, &self.log_batch_loss);
         let loss = training.train_epoch(training_data, &history);
         training.update(&mut self.weights);
-        self.log_progress.call1(&JsValue::NULL, &JsValue::from(1.0));
+        let _ = self.log_progress.call1(&JsValue::NULL, &JsValue::from(1.0));
         self.epochs += 1;
         loss
     }
@@ -454,7 +454,7 @@ impl <'a> NeuralNetworkTraining<'a> {
             let end = cmp::min(random_index_order.len(), start + BATCH_SIZE);
             let batch_indexes = &random_index_order[start..end];
             if progress % 5 == 0 {
-                self.log_progress.call1(&JsValue::NULL, &JsValue::from(i as f64 / (training_data.images.len() as f64)));
+                let _ = self.log_progress.call1(&JsValue::NULL, &JsValue::from(i as f64 / (training_data.images.len() as f64)));
             }
             // create a batch of tuples of referenced images and corresponding labels
             let batch = batch_indexes.iter()
@@ -469,9 +469,9 @@ impl <'a> NeuralNetworkTraining<'a> {
                     // 1 additional batch of images is summed in the first progress
                     // report because we don't report the loss on the first batch
                     // even though 0 % 5 == 0, so divide by 6 to get average loss
-                    self.log_batch_loss.call1(&JsValue::NULL, &JsValue::from(batch_losses / 6.0));
+                    let _ = self.log_batch_loss.call1(&JsValue::NULL, &JsValue::from(batch_losses / 6.0));
                 } else {
-                    self.log_batch_loss.call1(&JsValue::NULL, &JsValue::from(batch_losses / 5.0));
+                    let _ = self.log_batch_loss.call1(&JsValue::NULL, &JsValue::from(batch_losses / 5.0));
                 }
                 batch_losses = 0.0;
             }
