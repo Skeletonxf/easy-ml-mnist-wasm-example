@@ -279,6 +279,35 @@ impl NeuralNetwork {
             .unwrap()
     }
 
+    fn saliency_map(&self, image: &Image, label: Digit) {
+        let image: Matrix<f64> = image.clone().into();
+        let input: RecordMatrix<f64, _> = RecordMatrix::constants(image);
+        let history = WengertList::new();
+        let weights = weights_as_variables(&self.weights, &history);
+        // this neural network is a simple feed forward architecture, so dot product
+        // the input through the network weights and apply the sigmoid activation
+        // function each step, then take softmax to produce an output
+        let output = {
+            let layer1 = (input * &weights[0])
+                .map(sigmoid)
+                .expect("Sigmoid should not cause inconsistent histories");
+            let layer2 = (layer1 * &weights[1])
+                .map(sigmoid)
+                .expect("Sigmoid should not cause inconsistent histories");
+            layer2 * &weights[2]
+        };
+        // NB: We've left off the softmax layer here to aid in visualisation.
+        // Since the softmax layer doesn't depend on any of our weights this
+        // shouldn't hide any relevant information from our interpretation.
+        unimplemented!()
+        // TODO:
+        // We need to use our gradient tracking to now compute the gradient
+        // with respect to each input pixel
+        // Reference:
+        // https://christophm.github.io/interpretable-ml-book/pixel-attribution.html#vanilla-gradient
+
+    }
+
     /// Trains the neural net for 1 epoch and returns the average loss on the epoch
     pub fn train(&mut self, training_data: &Dataset) -> f64 {
         let _ = self.log_progress.call1(&JsValue::NULL, &JsValue::from(0.0));
@@ -334,6 +363,25 @@ struct NeuralNetworkTraining<'a> {
 
 const BATCH_SIZE: usize = 20;
 
+fn weights_as_variables<'a>(
+    weights: &Vec<Matrix<f64>>,
+    history: &'a WengertList<f64>,
+) -> Vec<RecordMatrix<'a, f64, Matrix<(f64, Index)>>> {
+    let mut w = Vec::with_capacity(weights.len());
+    for i in 0..weights.len() {
+        w.push(
+            RecordMatrix::variables(
+                &history,
+                Matrix::from_fn(
+                    weights[i].size(),
+                    |(j, k)| weights[i].get(j, k)
+                )
+            )
+        );
+    }
+    w
+}
+
 impl <'a> NeuralNetworkTraining<'a> {
     /// Given a WengertList which will be used exclusively for training this struct,
     /// and an existing configuration for weights, creates a new NeuralNetworkTraining
@@ -344,18 +392,7 @@ impl <'a> NeuralNetworkTraining<'a> {
         log_progress: &'a Function,
         log_batch_loss: &'a Function,
     ) -> NeuralNetworkTraining<'a> {
-        let mut weights = Vec::with_capacity(configuration.weights.len());
-        for i in 0..configuration.weights.len() {
-            weights.push(
-                RecordMatrix::variables(
-                    &history,
-                    Matrix::from_fn(
-                        configuration.weights[i].size(),
-                        |(j, k)| configuration.weights[i].get(j, k)
-                    )
-                )
-            );
-        }
+        let weights = weights_as_variables(&configuration.weights, history);
         NeuralNetworkTraining {
             weights,
             learning_rate: LEARNING_RATE * LEARNING_RATE_DISCOUNT_FACTOR.powi(epochs),
@@ -400,7 +437,6 @@ impl <'a> NeuralNetworkTraining<'a> {
             let classification = linear_algebra::softmax(
                 output.iter_row_major_as_records()
             );
-            //let classification = NeuralNetworkTraining::softmax(output.row_major_iter());
             // Get what we predicted for the true label. To minimise error, we should
             // have predicted 1
             let prediction: Record<f64> = classification[Into::<usize>::into(label)];
