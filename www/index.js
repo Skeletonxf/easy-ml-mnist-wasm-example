@@ -11,7 +11,13 @@ canvas.width = WIDTH
 canvas.height = HEIGHT
 let context = canvas.getContext('2d')
 
+let saliencyCanvas = document.querySelector('#saliency')
+saliencyCanvas.width = WIDTH
+saliencyCanvas.height = HEIGHT
+let saliencyContext = saliencyCanvas.getContext('2d')
+
 let currentImageIndicator = document.querySelector('#currentImage')
+
 let image = 0
 
 let drawNegative = false
@@ -87,6 +93,17 @@ let getColor = (color) => {
     }
 }
 
+let getSaliencyColor = (gradient) => {
+  // We don't expect gradients to be huge and we need a finite range
+  // to convert them to a colour so just clip to [-1, 1] for now
+  let clippedGradient = Math.min(Math.max(-1, gradient), 1)
+  let hexRange = ((clippedGradient + 1) * 0.5) * 255
+  // TODO: Consider introducing colour to show absolute value in one way and
+  // non absolute value in another. We may want -1 and 1 to have similar
+  // brightness and 0 to be the other end of the scale.
+  return `rgb(${hexRange}, ${hexRange}, ${hexRange})`
+}
+
 worker.onmessage = (event) => {
     let data = event.data
     if (data.loadedWorker) {
@@ -105,6 +122,7 @@ worker.onmessage = (event) => {
         let image = data.imageData
         let label = data.label
         let index = data.index
+        let saliency = data.saliencyMap
         // Draw image data to canvas
         let color = image[0];
         context.fillStyle = getColor(color)
@@ -119,6 +137,20 @@ worker.onmessage = (event) => {
             }
         }
         currentImageIndicator.innerHTML = `Image #${index}: (${label})\nPredicted: ${data.classification}`
+        // Draw saliency data to canvas
+        color = saliency[0];
+        console.log(`Smallest and largest gradients ${Math.min(...saliency)} ${Math.max(...saliency)}`)
+        saliencyContext.fillStyle = getSaliencyColor(color)
+        for (let y = 0; y < 28; y++) {
+            for (let x = 0; x < 28; x++) {
+                let index = x + (y * 28)
+                if (saliency[index] != color) {
+                    color = saliency[index]
+                    saliencyContext.fillStyle = getSaliencyColor(color)
+                }
+                saliencyContext.fillRect(x, y, 1, 1)
+            }
+        }
     }
     if (data.trainedEpoch) {
         console.log(`Loss: ${data.loss}`)

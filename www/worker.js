@@ -95,13 +95,18 @@ init().then(() => {
           postAccuracy()
       }
       if (data.requestCurrentImage) {
-          let image = Math.min(Math.max(0, data.currentImage), TRAINING_SIZE - 1)
-          let classification = network.classify(intoImage(training.images[image]))
+          let image_index = Math.min(Math.max(0, data.currentImage), TRAINING_SIZE - 1)
+          let image = intoImage(training.images[image_index])
+          let classification = network.classify(image)
+          let label = training.labels[image_index]
+          let saliency = network.saliency_map(image, label)
+          let saliencyArray = saliency.view_array_unsafe().slice()
           postMessage({
               currentImage: true,
-              imageData: training.images[image],
-              label: training.labels[image],
-              index: image,
+              imageData: training.images[image_index],
+              saliencyMap: saliencyArray,
+              label: label,
+              index: image_index,
               classification: classification
           })
       }

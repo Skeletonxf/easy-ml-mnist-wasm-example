@@ -93,11 +93,25 @@ impl Image {
             data: as_vec,
         }
     }
+
+    pub unsafe fn view_array_unsafe(&self) -> Float64Array {
+        unsafe {
+            Float64Array::view(&self.data)
+        }
+    }
 }
 
 impl From<Image> for Matrix<f64> {
     fn from(image: Image) -> Self {
         Matrix::from_flat_row_major((1,WIDTH * HEIGHT), image.data).map(|pixel| pixel)
+    }
+}
+
+impl From<Matrix<f64>> for Image {
+    fn from(matrix: Matrix<f64>) -> Self {
+        Image {
+            data: matrix.row_major_owned_iter().collect()
+        }
     }
 }
 
@@ -279,16 +293,16 @@ impl NeuralNetwork {
             .unwrap()
     }
 
-    fn saliency_map(&self, image: &Image, label: Digit) {
+    pub fn saliency_map(&self, image: &Image, label: Digit) -> Image {
         let image: Matrix<f64> = image.clone().into();
-        let input: RecordMatrix<f64, _> = RecordMatrix::constants(image);
         let history = WengertList::new();
+        let input: RecordMatrix<f64, _> = RecordMatrix::variables(&history, image);
         let weights = weights_as_variables(&self.weights, &history);
         // this neural network is a simple feed forward architecture, so dot product
         // the input through the network weights and apply the sigmoid activation
         // function each step, then take softmax to produce an output
         let output = {
-            let layer1 = (input * &weights[0])
+            let layer1 = (&input * &weights[0])
                 .map(sigmoid)
                 .expect("Sigmoid should not cause inconsistent histories");
             let layer2 = (layer1 * &weights[1])
@@ -299,13 +313,23 @@ impl NeuralNetwork {
         // NB: We've left off the softmax layer here to aid in visualisation.
         // Since the softmax layer doesn't depend on any of our weights this
         // shouldn't hide any relevant information from our interpretation.
-        unimplemented!()
-        // TODO:
+        // TODO: We may want to return the gradient of the predicted class
+        // rather than the correct class here
+        let gradient_of_correct_class = output.get_as_record(0, label.into());
         // We need to use our gradient tracking to now compute the gradient
         // with respect to each input pixel
         // Reference:
         // https://christophm.github.io/interpretable-ml-book/pixel-attribution.html#vanilla-gradient
+        let derivatives = gradient_of_correct_class.derivatives();
 
+        // TODO: Swap with easy-ml helper function after release of version 2.2
+        let gradients_of_image = Matrix::from_flat_row_major(
+            input.size(),
+            input.iter_row_major_as_records().map(|pixel| derivatives.at(&pixel)).collect()
+        );
+        return gradients_of_image.into()
+        // TODO: Try smoothgrad approach
+        // https://christophm.github.io/interpretable-ml-book/pixel-attribution.html#smoothgrad
     }
 
     /// Trains the neural net for 1 epoch and returns the average loss on the epoch
