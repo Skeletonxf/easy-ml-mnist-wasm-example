@@ -139,7 +139,6 @@ worker.onmessage = (event) => {
         currentImageIndicator.innerHTML = `Image #${index}: (${label})\nPredicted: ${data.classification}`
         // Draw saliency data to canvas
         color = saliency[0];
-        console.log(`Smallest and largest gradients ${Math.min(...saliency)} ${Math.max(...saliency)}`)
         saliencyContext.fillStyle = getSaliencyColor(color)
         for (let y = 0; y < 28; y++) {
             for (let x = 0; x < 28; x++) {

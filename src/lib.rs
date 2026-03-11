@@ -457,7 +457,7 @@ struct NeuralNetworkTraining<'a> {
     log_batch_loss: &'a Function,
 }
 
-const BATCH_SIZE: usize = 20;
+const BATCH_SIZE: usize = 40;
 
 impl <'a> NeuralNetworkTraining<'a> {
     /// Given a WengertList which will be used exclusively for training this struct,
@@ -567,8 +567,8 @@ impl <'a> NeuralNetworkTraining<'a> {
             let loss = self.train(batch, self.learning_rate, history);
             epoch_losses += loss;
             batch_losses += loss;
-            // Report progress to the Web Worker after every 100 images (5 batches
-            // for a BATCH_SIZE of 20).
+            // Report progress to the Web Worker after every 200 images (5 batches
+            // for a BATCH_SIZE of 40).
             if progress % 5 == 0 && progress != 0 {
                 if progress == 5 {
                     // 1 additional batch of images is summed in the first progress
