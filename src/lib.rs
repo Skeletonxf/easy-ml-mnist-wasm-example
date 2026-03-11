@@ -3,6 +3,7 @@ use wasm_bindgen::prelude::*;
 use js_sys::{Float64Array, Function};
 
 use easy_ml::matrices::Matrix;
+use easy_ml::matrices::views::{MatrixView, MatrixRef};
 use easy_ml::differentiation::{Record, RecordMatrix, WengertList, Index};
 use easy_ml::linear_algebra;
 use easy_ml::numeric::Numeric;
@@ -219,7 +220,7 @@ impl Dataset {
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NeuralNetwork {
-    weights: Vec<Matrix<f64>>,
+    weights: Model,
     epochs: i32,
     log_progress: Function,
     log_batch_loss: Function,
@@ -228,57 +229,53 @@ pub struct NeuralNetwork {
 const FIRST_HIDDEN_LAYER_SIZE: usize = 128;
 const SECOND_HIDDEN_LAYER_SIZE: usize = 64;
 
-// fn relu<T: Numeric + Copy>(x: T) -> T {
-//     if x > T::zero() {
-//         x
-//     } else {
-//         T::zero()
-//     }
-// }
-
-fn sigmoid<T: Numeric + Real+ Copy>(x: T) -> T {
-    T::one() / (T::one() + (-x).exp())
+#[derive(Clone, Debug)]
+struct Model {
+    first: Matrix<f64>,
+    second: Matrix<f64>,
+    classify: Matrix<f64>
 }
 
-#[wasm_bindgen]
-impl NeuralNetwork {
-    /// Creates a new Neural Network configuration of randomised weights
-    /// and a simple feed forward architecture.
-    pub fn new(
-        log_progress: Function,
-        log_batch_loss: Function,
-    ) -> NeuralNetwork {
-        let mut weights = vec![
-            Matrix::empty(0.0, (WIDTH * HEIGHT, FIRST_HIDDEN_LAYER_SIZE)),
-            Matrix::empty(0.0, (FIRST_HIDDEN_LAYER_SIZE, SECOND_HIDDEN_LAYER_SIZE)),
-            Matrix::empty(0.0, (SECOND_HIDDEN_LAYER_SIZE, 10)),
-        ];
-        for i in 0..weights.len() {
-            for j in 0..weights[i].size().0 {
-                for k in 0..weights[i].size().1 {
-                    weights[i].set(j, k, (2.0 * js_sys::Math::random()) - 1.0);
-                }
-            }
-        }
-        NeuralNetwork {
-            weights,
-            epochs: 0,
-            log_progress,
-            log_batch_loss,
-            //buffer: Vec::with_capacity(0),
+impl Model {
+    fn new_random_values() -> Self {
+        let first = Matrix::from_fn(
+            (WIDTH * HEIGHT, FIRST_HIDDEN_LAYER_SIZE),
+            |(_row, _column)| (2.0 * js_sys::Math::random()) - 1.0
+        );
+        let second = Matrix::from_fn(
+            (FIRST_HIDDEN_LAYER_SIZE, SECOND_HIDDEN_LAYER_SIZE),
+            |(_row, _column)| (2.0 * js_sys::Math::random()) - 1.0
+        );
+        let classify = Matrix::from_fn(
+            (SECOND_HIDDEN_LAYER_SIZE, 10),
+            |(_row, _column)| (2.0 * js_sys::Math::random()) - 1.0
+        );
+        Model {
+            first,
+            second,
+            classify,
         }
     }
 
-    pub fn layers(&self) -> usize {
-        self.weights.len()
+    fn len(&self) -> usize {
+        3
     }
 
-    pub fn classify(&self, image: &Image) -> Digit {
-        let input: Matrix<f64> = image.clone().into();
+    fn classify_generic<S1, S2, S3>(
+        image: &Matrix<f64>,
+        first: &MatrixView<f64, S1>,
+        second: &MatrixView<f64, S2>,
+        classify: &MatrixView<f64, S3>
+    ) -> Digit
+    where
+        S1: MatrixRef<f64>,
+        S2: MatrixRef<f64>,
+        S3: MatrixRef<f64>
+    {
         // this neural network is a simple feed forward architecture, so dot product
         // the input through the network weights and apply the sigmoid activation
         // function each step, then take softmax to produce an output
-        let output = ((input * &self.weights[0]).map(sigmoid) * &self.weights[1]).map(sigmoid) * &self.weights[2];
+        let output = ((image * first).map(sigmoid) * second).map(sigmoid) * classify;
         let classification = linear_algebra::softmax(output.row_major_iter());
         // find the index of the largest softmax'd label
         classification.iter()
@@ -293,23 +290,98 @@ impl NeuralNetwork {
             .unwrap()
     }
 
+    fn classify(&self, image: &Matrix<f64>) -> Digit {
+        Model::classify_generic(
+            image,
+            &MatrixView::from(&self.first),
+            &MatrixView::from(&self.second),
+            &MatrixView::from(&self.classify)
+        )
+    }
+
+    fn with_gradients<'a>(&self, history: &'a WengertList<f64>) -> ModelTraining<'a> {
+        ModelTraining {
+            first: RecordMatrix::variables(
+                &history,
+                Matrix::from_fn(
+                    self.first.size(),
+                    |(j, k)| self.first.get(j, k)
+                )
+            ),
+            second: RecordMatrix::variables(
+                &history,
+                Matrix::from_fn(
+                    self.second.size(),
+                    |(j, k)| self.second.get(j, k)
+                )
+            ),
+            classify: RecordMatrix::variables(
+                &history,
+                Matrix::from_fn(
+                    self.classify.size(),
+                    |(j, k)| self.classify.get(j, k)
+                )
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ModelTraining<'a> {
+    first: RecordMatrix<'a, f64, Matrix<(f64, Index)>>,
+    second: RecordMatrix<'a, f64, Matrix<(f64, Index)>>,
+    classify: RecordMatrix<'a, f64, Matrix<(f64, Index)>>,
+}
+
+impl <'a> ModelTraining<'a> {
+    fn output(
+        &self,
+        image: &RecordMatrix<'a, f64, Matrix<(f64, Index)>>
+    ) -> RecordMatrix<'a, f64, Matrix<(f64, Index)>> {
+        let layer1 = (image * &self.first)
+            .map(sigmoid)
+            .expect("Sigmoid should not cause inconsistent histories");
+        let layer2 = (layer1 * &self.second)
+            .map(sigmoid)
+            .expect("Sigmoid should not cause inconsistent histories");
+        layer2 * &self.classify
+    }
+}
+
+fn sigmoid<T: Numeric + Real+ Copy>(x: T) -> T {
+    T::one() / (T::one() + (-x).exp())
+}
+
+#[wasm_bindgen]
+impl NeuralNetwork {
+    /// Creates a new Neural Network configuration of randomised weights
+    /// and a simple feed forward architecture.
+    pub fn new(
+        log_progress: Function,
+        log_batch_loss: Function,
+    ) -> NeuralNetwork {
+        NeuralNetwork {
+            weights: Model::new_random_values(),
+            epochs: 0,
+            log_progress,
+            log_batch_loss,
+        }
+    }
+
+    pub fn layers(&self) -> usize {
+        self.weights.len()
+    }
+
+    pub fn classify(&self, image: &Image) -> Digit {
+        let input: Matrix<f64> = image.clone().into();
+        self.weights.classify(&input)
+    }
+
     pub fn saliency_map(&self, image: &Image, label: Digit) -> Image {
         let image: Matrix<f64> = image.clone().into();
         let history = WengertList::new();
         let input: RecordMatrix<f64, _> = RecordMatrix::variables(&history, image);
-        let weights = weights_as_variables(&self.weights, &history);
-        // this neural network is a simple feed forward architecture, so dot product
-        // the input through the network weights and apply the sigmoid activation
-        // function each step, then take softmax to produce an output
-        let output = {
-            let layer1 = (&input * &weights[0])
-                .map(sigmoid)
-                .expect("Sigmoid should not cause inconsistent histories");
-            let layer2 = (layer1 * &weights[1])
-                .map(sigmoid)
-                .expect("Sigmoid should not cause inconsistent histories");
-            layer2 * &weights[2]
-        };
+        let output = self.weights.with_gradients(&history).output(&input);
         // NB: We've left off the softmax layer here to aid in visualisation.
         // Since the softmax layer doesn't depend on any of our weights this
         // shouldn't hide any relevant information from our interpretation.
@@ -379,32 +451,13 @@ impl NeuralNetwork {
 /// not a huge issue, because Records are only needed for training anyway.
 #[derive(Clone, Debug)]
 struct NeuralNetworkTraining<'a> {
-    weights: Vec<RecordMatrix<'a, f64, Matrix<(f64, Index)>>>,
+    weights: ModelTraining<'a>,
     learning_rate: f64,
     log_progress: &'a Function,
     log_batch_loss: &'a Function,
 }
 
 const BATCH_SIZE: usize = 20;
-
-fn weights_as_variables<'a>(
-    weights: &Vec<Matrix<f64>>,
-    history: &'a WengertList<f64>,
-) -> Vec<RecordMatrix<'a, f64, Matrix<(f64, Index)>>> {
-    let mut w = Vec::with_capacity(weights.len());
-    for i in 0..weights.len() {
-        w.push(
-            RecordMatrix::variables(
-                &history,
-                Matrix::from_fn(
-                    weights[i].size(),
-                    |(j, k)| weights[i].get(j, k)
-                )
-            )
-        );
-    }
-    w
-}
 
 impl <'a> NeuralNetworkTraining<'a> {
     /// Given a WengertList which will be used exclusively for training this struct,
@@ -416,7 +469,7 @@ impl <'a> NeuralNetworkTraining<'a> {
         log_progress: &'a Function,
         log_batch_loss: &'a Function,
     ) -> NeuralNetworkTraining<'a> {
-        let weights = weights_as_variables(&configuration.weights, history);
+        let weights = configuration.weights.with_gradients(history);
         NeuralNetworkTraining {
             weights,
             learning_rate: LEARNING_RATE * LEARNING_RATE_DISCOUNT_FACTOR.powi(epochs),
@@ -427,11 +480,15 @@ impl <'a> NeuralNetworkTraining<'a> {
 
     /// Updates an existing neural network configuration to the new weights
     /// learned through training.
-    fn update(&self, network_weights: &mut Vec<Matrix<f64>>) {
-        for (i, weights) in self.weights.iter().enumerate() {
-            for ((j, k), (neuron, _)) in weights.view().row_major_iter().with_index() {
-                network_weights[i].set(j, k, neuron);
-            }
+    fn update(&self, network_weights: &mut Model) {
+        for ((row, column), (neuron, _)) in self.weights.first.view().row_major_iter().with_index() {
+            network_weights.first.set(row, column, neuron);
+        }
+        for ((row, column), (neuron, _)) in self.weights.second.view().row_major_iter().with_index() {
+            network_weights.second.set(row, column, neuron);
+        }
+        for ((row, column), (neuron, _)) in self.weights.classify.view().row_major_iter().with_index() {
+            network_weights.classify.set(row, column, neuron);
         }
     }
 
@@ -445,19 +502,7 @@ impl <'a> NeuralNetworkTraining<'a> {
         let mut errors = Vec::with_capacity(BATCH_SIZE);
         for (image, label) in batch {
             let image: Matrix<f64> = image.clone().into();
-            let input: RecordMatrix<f64, _> = RecordMatrix::constants(image);
-            // this neural network is a simple feed forward architecture, so dot product
-            // the input through the network weights and apply the sigmoid activation
-            // function each step, then take softmax to produce an output
-            let output = {
-                let layer1 = (input * &self.weights[0])
-                    .map(sigmoid)
-                    .expect("Sigmoid should not cause inconsistent histories");
-                let layer2 = (layer1 * &self.weights[1])
-                    .map(sigmoid)
-                    .expect("Sigmoid should not cause inconsistent histories");
-                layer2 * &self.weights[2]
-            };
+            let output = self.weights.output(&RecordMatrix::constants(image));
             let classification = linear_algebra::softmax(
                 output.iter_row_major_as_records()
             );
@@ -474,17 +519,17 @@ impl <'a> NeuralNetworkTraining<'a> {
         let derivatives = error.derivatives();
         // update weights to minimise error, note that if error was 0 this
         // trivially does nothing
-        self.weights[0].map_mut(|x| x - (derivatives[&x] * learning_rate))
+        self.weights.first.map_mut(|x| x - (derivatives[&x] * learning_rate))
             .expect("updating 0 weights should not cause inconsistent histories");
-        self.weights[1].map_mut(|x| x - (derivatives[&x] * learning_rate))
+        self.weights.second.map_mut(|x| x - (derivatives[&x] * learning_rate))
             .expect("updating 1 weights should not cause inconsistent histories");
-        self.weights[2].map_mut(|x| x - (derivatives[&x] * learning_rate))
+        self.weights.classify.map_mut(|x| x - (derivatives[&x] * learning_rate))
             .expect("updating 2 weights should not cause inconsistent histories");
         // reset gradients
         history.clear();
-        self.weights[0].reset();
-        self.weights[1].reset();
-        self.weights[2].reset();
+        self.weights.first.reset();
+        self.weights.second.reset();
+        self.weights.classify.reset();
         error.number / (batch_size as f64)
     }
 
